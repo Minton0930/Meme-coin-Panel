@@ -5,6 +5,7 @@
 //    comment count, "king of the hill", bonding-curve progress.
 //  - GeckoTerminal trending pools on Solana (30 calls/min free).
 import { Limiter, getJson } from '../http.js';
+import { config } from '../config.js';
 
 const jupLim = new Limiter('jupiter', 1_100);
 const pumpLim = new Limiter('pumpfun-info', 350);
@@ -12,7 +13,9 @@ const gtLim = new Limiter('geckoterminal', 2_500);
 
 export async function jupiterInfo(mints) {
   if (!mints.length) return new Map();
-  const r = await getJson(jupLim, `https://lite-api.jup.ag/tokens/v2/search?query=${mints.slice(0, 50).join(',')}`);
+  // Jupiter is moving to keyed access; with a JUPITER_API_KEY in .env the keyed host is used.
+  const host = config.jupiterKey ? 'https://api.jup.ag' : 'https://lite-api.jup.ag';
+  const r = await getJson(jupLim, `${host}/tokens/v2/search?query=${mints.slice(0, 50).join(',')}`, { headers: config.jupiterKey ? { 'x-api-key': config.jupiterKey } : {} });
   const out = new Map();
   for (const t of Array.isArray(r) ? r : []) {
     if (!t.id) continue;
@@ -21,7 +24,7 @@ export async function jupiterInfo(mints) {
       icon: t.icon, twitter: t.twitter, telegram: t.telegram, website: t.website,
       holders: t.holderCount ?? null,
       organicScore: t.organicScore ?? null, organicLabel: t.organicScoreLabel ?? null,
-      verified: !!t.isVerified,
+      verified: !!t.isVerified, isSus: !!a.isSus,
       mintDisabled: a.mintAuthorityDisabled, freezeDisabled: a.freezeAuthorityDisabled,
       topHoldersPct: a.topHoldersPercentage ?? null, devBalancePct: a.devBalancePercentage ?? null, devMints: a.devMints ?? null,
       traders5m: t.stats5m?.numTraders ?? null, netBuyers5m: t.stats5m?.numNetBuyers ?? null, holderChange1h: t.stats1h?.holderChange ?? null,

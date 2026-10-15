@@ -1,7 +1,10 @@
 // News radar: collects "watch words" from
-//   1. posts by big X accounts (needs a paid X API plan: X_BEARER_TOKEN),
-//   2. Google News headlines about those people (free, no key, a few minutes behind),
-//   3. words you type yourself in the dashboard (free, instant).
+//   1. built-in big accounts that have a FREE public feed: Trump's Truth Social
+//      (via the trumpstruth.org mirror) and Telegram channel previews of big
+//      crypto news accounts (t.me/s/...), polled every ~30s,
+//   2. Google News headlines about big names (free, a few minutes behind),
+//   3. posts by X accounts, ONLY if you add a paid X API key (X has no free feed),
+//   4. words you type yourself in the dashboard (free, instant).
 // Every new coin is checked against the live watch words the moment it appears.
 import { Limiter, getJson, record } from '../http.js';
 import { config } from '../config.js';
@@ -10,7 +13,8 @@ import { extractKeywords, matchCoin } from '../newsmatch.js';
 const xLim = new Limiter('x-api', 15_000);       // X Basic: 60 recent-search calls / 15 min
 const gLim = new Limiter('google-news', 20_000);
 
-const TTL = { x: 12 * 3600_000, news: 3 * 3600_000, manual: Infinity };
+const TTL = { x: 12 * 3600_000, social: 12 * 3600_000, news: 3 * 3600_000, manual: Infinity };
+const sLim = new Limiter('social-feeds', 2_500);
 export const watchWords = new Map(); // kw -> { kw, strong, source, text, url, author, at }
 export const alerts = [];            // newest first
 let sinceId = null;
@@ -57,7 +61,7 @@ export function checkCoin(coin, onlyWord) {
     };
     alerts.unshift(a);
     if (alerts.length > 200) alerts.pop();
-    coin.newsMatch = { keyword: w.kw, source: w.source, strong: a.strong };
+    coin.newsMatch = { keyword: w.kw, source: w.source, strong: a.strong, author: w.author, text: w.text?.slice(0, 140), url: w.url };
   }
 }
 
@@ -120,10 +124,79 @@ async function pollGoogleNews() {
   if (seenHeadlines.size > 5000) seenHeadlines.clear();
 }
 
+// Built-in accounts with free public feeds (checked October 2026).
+export const SOCIAL = [
+  { kind: 'rss', url: 'https://trumpstruth.org/feed', author: '@realDonaldTrump (Truth Social)', ignore: ['Trump', 'Donald', 'President'] },
+  { kind: 'tg', channel: 'WatcherGuru', author: '@WatcherGuru' },
+  { kind: 'tg', channel: 'lookonchainchannel', author: '@lookonchain' },
+  { kind: 'tg', channel: 'whale_alert_io', author: '@whale_alert' },
+];
+const seenPosts = new Set();
+const strip = h => decode(h.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+
+export async function fetchText(url) {
+  await sLim.take();
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(12_000), headers: { 'user-agent': 'Mozilla/5.0 (memecoin-analyzer; analysis only)' } });
+    if (!res.ok) throw new Error(`${res.status}`);
+    const t = await res.text();
+    record('social-feeds', true);
+    return t;
+  } catch (e) { record('social-feeds', false, `${url.split('/')[2]}: ${e.message ?? e}`); throw e; }
+}
+
+// Telegram public preview page -> [{ id, text, at, url }]
+export function parseTelegram(html, channel) {
+  const out = [];
+  for (const chunk of html.split('data-post="').slice(1)) {
+    const id = chunk.slice(0, chunk.indexOf('"'));
+    const tm = chunk.match(/class="tgme_widget_message_text[^"]*"[^>]*>([\s\S]*?)<\/div>/);
+    const at = Date.parse((chunk.match(/<time[^>]*datetime="([^"]+)"/) ?? [])[1] ?? '') || Date.now();
+    if (tm) out.push({ id: `tg:${id}`, text: strip(tm[1]), at, url: `https://t.me/${id}` });
+  }
+  return out;
+}
+export function parseRss(xml) {
+  return xml.split('<item>').slice(1, 20).map(item => {
+    const pick = tag => decode((item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`)) ?? [])[1] ?? '');
+    const link = pick('link');
+    const text = strip(pick('description') || pick('title'));
+    return { id: `rss:${pick('guid') || link}`, text, at: Date.parse(pick('pubDate')) || Date.now(), url: link };
+  });
+}
+
+async function pollSocial() {
+  for (const src of SOCIAL) {
+    let posts;
+    try {
+      const body = await fetchText(src.kind === 'tg' ? `https://t.me/s/${src.channel}` : src.url);
+      posts = src.kind === 'tg' ? parseTelegram(body, src.channel) : parseRss(body);
+    } catch { continue; }
+    for (const p of posts) {
+      if (!p.text || seenPosts.has(p.id) || Date.now() - p.at > 2 * 3600_000) continue;
+      seenPosts.add(p.id);
+      const long = p.text.length > 200;
+      for (const k of extractKeywords(p.text, { headline: long, ignore: src.ignore ?? [] })) {
+        if (long && !k.strong) continue;
+        const info = { strong: k.strong, source: 'social', text: p.text, url: p.url, author: src.author, at: p.at };
+        addWatchWord(k.kw, info);
+        wordHook({ kw: k.kw, ...info });
+      }
+    }
+  }
+  if (seenPosts.size > 20_000) seenPosts.clear();
+}
+
+export function radarInfo() {
+  const n = SOCIAL.length + config.newsTopics.length + (config.xBearer ? config.xAccounts.length : 0);
+  return { accounts: n, cadence: `big accounts every ~30s (Truth Social + Telegram news channels) · headlines every 2 min${config.xBearer ? ' · X every 15s' : ''} · your words instantly` };
+}
+
 const decode = s => s.replace(/<!\[CDATA\[|\]\]>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 
 export function startNewsRadar() {
   const loop = async (fn, ms) => { for (;;) { try { await fn(); } catch {} expire(); await new Promise(r => setTimeout(r, ms)); } };
   loop(pollX, 15_000);
+  loop(pollSocial, 30_000);
   loop(pollGoogleNews, 120_000);
 }

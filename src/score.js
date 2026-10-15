@@ -80,9 +80,9 @@ export function riskScore(c) {
     const n = serialN;
     f.push(factor('serial', 'Dev launched other tokens', 10, n >= 5 ? 'bad' : 'warn', n >= 10 ? 10 : n >= 5 ? 7 : 3, `${n} tokens from this creator (serial launcher)`));
   }
-  const devHold = rug?.creatorBalancePct ?? jup?.devBalancePct ?? (early ? Math.max(0, early.devBuyPct - early.devSoldPct) : null);
+  const devHold = rug?.creatorBalancePct ?? jup?.devBalancePct ?? (early ? Math.max(0, early.devBuyPct - early.devSoldPct) : c.pump?.devBuyPct ?? null);
   if (devHold != null) {
-    const p = devHold > 10 ? 10 : devHold > 5 ? 5 : 0;
+    const p = devHold > 10 ? 10 : devHold > 5 ? 5 : devHold > 3 ? 2 : 0;
     f.push(factor('devhold', 'Dev holding', 10, p >= 10 ? 'bad' : p ? 'warn' : 'ok', p, fmtPct(devHold)));
   }
   if (early?.devSoldAll) f.push(factor('devsold', 'Dev dumped', 15, 'bad', 15, `Dev sold ${fmtPct(early.devSoldPct)} in the first ${early.windowSec}s`));
@@ -93,6 +93,28 @@ export function riskScore(c) {
     const p = s > 20 ? 15 : s > 10 ? 9 : s > 4 ? 4 : 0;
     f.push(factor('snipers', 'Snipers / bundle (first 5s)', 15, p >= 9 ? 'bad' : p ? 'warn' : 'ok', p, `${early.snipeBuys} buys took ${fmtPct(s)} of supply within 5s of launch`));
   }
+  // Launch bundle: wallets that bought in the launch block or the next 2 blocks.
+  // Thresholds follow Bubblemaps / SolanaTracker / Mobula: >5% of supply is a
+  // warning, >=10-15% is a major red flag, 3+ wallets in the launch block is a bundle.
+  const b = c.bundle;
+  const young = Date.now() - (c.createdAt ?? c.firstSeen ?? 0) < 24 * 3600_000;
+  if (b && !b.failed && !b.tooOld) {
+    const p = b.pct >= 15 ? 25 : b.pct >= 10 ? 18 : b.pct >= 5 || b.sameBlock >= 3 ? 8 : 0;
+    f.push(factor('bundle', 'Launch bundle', 25, p >= 18 ? 'bad' : p ? 'warn' : 'ok', p, `${b.wallets} wallets took ${fmtPct(b.pct)} in the first 3 blocks${b.sameBlock >= 3 ? `, ${b.sameBlock} in the launch block itself` : ''}`));
+  } else if (young && c.pump) f.push(factor('bundle', 'Launch bundle', 25, 'unknown', 6, b?.failed ? 'Check failed, retrying' : 'Not checked yet'));
+
+  // Token-2022 honeypot tricks read straight from the mint account.
+  for (const t of ch?.tricks ?? []) f.push(factor('token2022', 'Token trick', 30, t.bad ? 'bad' : 'warn', t.bad ? 30 : 8, t.text));
+
+  // Fake volume: lots of volume, few real holders or a low Jupiter organic score.
+  if (m && m.vol1h > 20_000) {
+    const holdersN = rug?.totalHolders ?? jup?.holders;
+    const org = jup?.organicScore;
+    if (org != null && org < 10) f.push(factor('washvol', 'Fake-looking volume', 10, 'warn', 8, `organic score ${org.toFixed(0)}/100 with $${fmtNum(m.vol1h)} volume in 1h`));
+    else if (holdersN != null && m.liqUsd && m.vol1h > m.liqUsd * 15 && holdersN < 300) f.push(factor('washvol', 'Fake-looking volume', 10, 'warn', 8, `$${fmtNum(m.vol1h)} volume in 1h but only ${holdersN} holders and $${fmtNum(m.liqUsd)} liquidity`));
+  }
+  if (jup?.isSus) f.push(factor('rcdanger', 'Jupiter marks it suspicious', 15, 'bad', 15, 'Jupiter audit flag: suspicious token'));
+
   if (rug?.insidersDetected) f.push(factor('rcinsider', 'Insider network (RugCheck)', 8, 'warn', Math.min(8, rug.insidersDetected), `${rug.insidersDetected} linked insider wallets detected`));
 
   // 7. Market behaviour.
@@ -109,7 +131,7 @@ export function riskScore(c) {
   if (dangers.length) f.push(factor('rcdanger', 'Other RugCheck dangers', 15, 'bad', Math.min(15, dangers.length * 5), dangers.map(d => d.name).join(', ')));
 
   let score = f.reduce((s, x) => s + x.points, 0);
-  const hardFail = rug?.rugged || mintAuth || frz || early?.devSoldAll;
+  const hardFail = rug?.rugged || mintAuth || frz || early?.devSoldAll || (ch?.tricks ?? []).some(t => t.bad);
   if (rug?.rugged) { score = 100; f.unshift(factor('rugged', 'Marked RUGGED', 100, 'bad', 100, 'RugCheck marks this token as rugged')); }
   score = Math.min(100, score);
   if (hardFail) score = Math.max(score, 60);
@@ -166,7 +188,13 @@ export function fmtNum(n) {
 
 // "High potential" filter: only coins with fewer red flags (LOW or MEDIUM risk,
 // mostly checked), ranked by activity and safety together. A filter, not a forecast.
+// "Potential" = fewer red flags + strong activity. It is a filter, not a forecast:
+// a coin only gets one if it is LOW/MEDIUM risk, mostly checked, has NO red
+// (bad) finding at all, and has passed the launch-bundle check when it applies.
 export function potentialScore(risk, mom) {
   if (!risk || risk.score >= 50 || risk.coverage < 80) return null;
+  const fs = risk.factors ?? [];
+  if (fs.some(x => x.status === 'bad')) return null;
+  if (fs.some(x => x.key === 'bundle' && x.status === 'unknown')) return null;
   return Math.round((mom?.score ?? 0) * 0.65 + (100 - risk.score) * 0.35);
 }

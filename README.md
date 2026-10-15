@@ -1,8 +1,8 @@
 # RUGRADAR: Solana memecoin radar
 
-Watches every new Solana memecoin as it launches, warns you about rug pulls, shows what's hot right now, and alerts you when a coin launches that matches something big accounts just posted about (for example a new dog called Elsa).
+One simple feed of new or talked-about Solana memecoins that pass a strict rug and bundle filter, a loud siren when a big account posts something a new coin is named after, and a page with your own trades and profit.
 
-It does **not** tell you to buy or sell, never trades, and never asks for your wallet or seed phrase. "LOW risk" means fewer red flags were found. It never means safe.
+It does **not** tell you to buy or sell, never trades, and never asks for a private key or seed phrase. "Potential" means fewer red flags plus strong activity. It is never a promise.
 
 ![dashboard](docs/screenshot.png)
 
@@ -22,25 +22,27 @@ Once updates are switched on (see `update-source.txt`), `start.bat` downloads th
 
 ## Everything is free
 
-All coin data comes from free public sources with no keys: pump.fun, DexScreener, Jupiter, GeckoTerminal, RugCheck, Solana RPC, CoinGecko, Reddit and Google News.
+All coin data comes from free public sources: pump.fun, DexScreener, Jupiter, GeckoTerminal, RugCheck, Solana RPC, CoinGecko, Telegram public channels, Truth Social (via trumpstruth.org) and Google News.
 
-Optional, in **⚙ SETTINGS** (no file editing needed):
+Optional, in **⚙ SETTINGS**:
 
 | Setting | What it does | Cost |
 |---|---|---|
-| Solana RPC URL from Helius | Much faster rug checks | Free (helius.dev) |
-| People to watch in news headlines | Names for the news radar | Free |
-| Anthropic API key | The AI analyst chat | Paid per use. The only paid part, and optional |
+| Your Solana wallet **address** | Shows your trades and profit on MY TRADES (read-only) | Free |
+| Solana RPC URL from Helius | Much faster rug, bundle and trade checks | Free (helius.dev) |
+| Anthropic API key | The ASK AI chat | Paid per use, optional |
 
-Reading X posts live needs a paid X API plan, so it's left out. The free headlines and your own watch words do that job instead.
+**Only ever paste your public address.** The app refuses anything that looks like a private key or seed phrase and never saves it. Nobody legit ever needs those.
 
 ## What's on the screen
 
-- **News radar:** type a word you just saw in a post (like a new dog's name) and any coin launched with that name pops up with a beep the second it appears. Headlines about the people you pick add words automatically, a few minutes behind X.
-- **Top potential now:** the 5 coins with the best mix of lower rug risk and strong activity right now. It's a filter, not a prediction.
-- **Coins:** opens on **HIGH POTENTIAL**, which only shows coins that are LOW or MEDIUM risk, mostly checked, and active. HIGH and DANGER risk coins are hidden everywhere unless you tick **SHOW RISKY**. Other views: ALL, NEW, TRENDING, NEWS MATCH. Each coin shows its picture and buttons for X, Telegram, website, pump.fun and the chart, plus age, market cap, liquidity, volume, holders, top-10 %, RISK, HYPE and POTENTIAL.
-- **Coin check:** click a coin for its description, all its links (X search, pump.fun, chart, Jupiter, RugCheck, Bubblemaps, Solscan), the three scores, and "What we found" in plain English. **More detail** shows the full score breakdown and top holders.
-- **AI analyst:** ask anything about the coins on screen. It explains the risk. It won't tell you to buy or sell.
+- **Siren:** when a built-in big account (Trump on Truth Social, WatcherGuru, Lookonchain, Whale Alert, plus headlines about Elon Musk, Trump, CZ and MrBeast) posts a name and a coin with that name launches, a flashing banner and a loud siren go off. It shows how many seconds after the post the coin launched, and its rug risk. Copycats launch fast, so check first.
+- **High potential feed:** the only list. It shows coins that are new (under 2 hours) or being posted or talked about, **and** pass every check: LOW or MEDIUM risk, most checks done, no red flag at all, and no big bundle at launch. The feed can be quiet. That's the filter doing its job.
+- **Coin check:** click a coin for its picture, description, every link (X, Telegram, website, the post, pump.fun, chart, RugCheck, Bubblemaps, Solscan), the three scores and "What we found" in plain English.
+- **My trades:** add your wallet address and see every swap with what you spent, what you got back, profit taken and open profit. Each winning sell gets a printed **profit receipt** with a stamp and a sound. New winning sells pop the receipt automatically.
+- **Ask AI:** explains the risk on any coin. It won't tell you to buy or sell.
+
+See [docs/rug-research.md](docs/rug-research.md) for every check, its threshold and where it comes from.
 
 ## Good to know
 
@@ -59,7 +61,8 @@ server.js               web server, 1-second live stream, settings and watch-wor
 src/engine.js           coin table, schedules each data source within its rate limit
 src/score.js            rug-risk and hype scoring
 src/newsmatch.js        turns posts and headlines into watch words, matches coin names
-src/sources/news.js     Google News, your watch words, alerts
+src/sources/news.js     built-in big accounts (Truth Social, Telegram), Google News, your words, alerts
+src/wallet.js           your trades and profit from your public wallet address (read-only)
 src/sources/*.js        DexScreener, PumpPortal, pump.fun info, Jupiter, GeckoTerminal, RugCheck, Solana RPC, trends
 src/chat.js             AI analyst
 src/update.js           tells the open dashboard when a newer version is published
@@ -67,4 +70,4 @@ update.ps1              downloads the newest version (run by start.bat), keeps .
 public/                 dashboard (terminal theme)
 ```
 
-Real update speeds: new pump.fun launches arrive instantly. Prices for the most active coins refresh every second, and the rest every 10–25 seconds. Rug checks take about 2 seconds per coin, most active coins first. Jupiter checks 50 coins every ~2 seconds, pump.fun coin info about 3 coins a second, GeckoTerminal trending every minute, headlines every 2 minutes, and your own watch words apply instantly.
+Real update speeds: new pump.fun launches arrive instantly. Prices for the most active coins refresh every second, and the rest every 10–25 seconds. Rug checks take about 2 seconds per coin, most active coins first. Big accounts are checked every ~30 seconds. Bundle checks run on one clean-looking coin at a time. Jupiter checks 50 coins every ~2 seconds, pump.fun coin info about 3 coins a second, GeckoTerminal trending every minute, headlines every 2 minutes, and your own watch words apply instantly.

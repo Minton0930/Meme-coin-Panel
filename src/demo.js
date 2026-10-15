@@ -2,6 +2,7 @@
 // Everything shown in demo mode is fake and labelled as such in the UI.
 import { coins, upsert, rescore } from './engine.js';
 import { addWatchWord, checkCoin } from './sources/news.js';
+import { buildPositions } from './wallet.js';
 
 const WORDS = ['PEPE', 'DOGE', 'CAT', 'FROG', 'MOON', 'BONK', 'WIF', 'GIGA', 'CHAD', 'SIGMA', 'SKIBIDI', 'RIZZ', 'GOAT', 'HAMSTER', 'PNUT', 'MOODENG', 'FWOG', 'POPCAT', 'BRETT', 'TURBO'];
 const SUF = ['', 'INU', 'AI', '2.0', 'CEO', 'KING', 'WIFHAT', 'SOL'];
@@ -42,6 +43,7 @@ function spawn(forced) {
     early: { final: true, windowSec: 60, devBuyPct: rnd(0, 8), devSoldPct: shady && Math.random() < 0.2 ? 8 : 0, devSoldAll: false, snipeBuys: Math.floor(rnd(0, shady ? 25 : 4)), snipePct: shady ? rnd(2, 30) : rnd(0, 3), uniqueBuyers: Math.floor(rnd(5, 120)), buys: 100, sells: 30 },
     jup: { holders: Math.floor(rnd(30, 5000)), organicScore: shady ? rnd(0, 25) : rnd(20, 90), netBuyers5m: Math.floor(rnd(shady ? -20 : -5, 40)), holderChange1h: Math.floor(rnd(-10, 120)), checkedAt: Date.now() },
     info: { twitter: Math.random() < 0.7 ? `https://x.com/${sym.toLowerCase()}_demo` : null, website: Math.random() < 0.4 ? 'https://example.com' : null, telegram: Math.random() < 0.4 ? 'https://t.me/' : null, description: `${sym} demo coin. Fake text for trying the dashboard.`, replies: Math.floor(rnd(0, 300)), kingOfHill: Math.random() < 0.1, checkedAt: Date.now() },
+    bundle: { wallets: Math.floor(rnd(1, shady ? 40 : 6)), sameBlock: Math.floor(rnd(0, shady ? 12 : 3)), pct: shady ? rnd(3, 35) : rnd(0, 6), checkedAt: Date.now() },
     gtRank: graduated && Math.random() < 0.2 ? Math.floor(rnd(1, 20)) : undefined,
     trend: { coingeckoTrending: Math.random() < 0.05, reddit: { posts1h: Math.floor(rnd(0, 6)), posts24h: Math.floor(rnd(0, 40)), top: [] }, tiktok: null, tiktokEnabled: false, checkedAt: Date.now() },
   });
@@ -68,7 +70,7 @@ function fakeNews() {
   const name = pick(PETS);
   const kw = name.toLowerCase();
   const text = `Say hi to ${name[0] + name.slice(1).toLowerCase()}, our new puppy (DEMO POST, not real)`;
-  const info = { strong: true, source: 'x', text, url: 'https://x.com/', author: '@demo_account', at: Date.now() };
+  const info = { strong: true, source: 'social', text, url: 'https://t.me/', author: pick(['@realDonaldTrump (Truth Social) DEMO', '@WatcherGuru DEMO', '@lookonchain DEMO']), at: Date.now() };
   addWatchWord(kw, info);
   for (const c of coins.values()) checkCoin(c, { kw, ...info });
   setTimeout(() => spawn(name), 2_000 + Math.random() * 3_000);
@@ -81,4 +83,33 @@ export function startDemo() {
   for (let i = 0; i < 40; i++) spawn();
   setInterval(() => Math.random() < 0.6 && spawn(), 1_500);
   setInterval(drift, 1_000);
+  setTimeout(() => { for (let i = 0; i < 5; i++) fakeTrade(); setInterval(fakeTrade, 35_000); }, 3_000);
+}
+
+// Fake trades for the MY TRADES page in demo mode. A new fake sell lands every ~35s.
+const demoTrades = [];
+function fakeTrade() {
+  const list = [...coins.values()].filter(c => c.market?.priceUsd);
+  if (!list.length) return;
+  const c = pick(list);
+  const sol = rnd(0.1, 2), amount = sol / (c.market.priceUsd / 160);
+  const t0 = Date.now() - rnd(60_000, 3600_000);
+  demoTrades.push({ side: 'buy', mint: c.mint, symbol: c.symbol, amount, sol, time: t0, sig: addr() + addr() });
+  const mult = Math.random() < 0.65 ? rnd(1.2, 6) : rnd(0.3, 0.95);
+  demoTrades.push({ side: 'sell', mint: c.mint, symbol: c.symbol, amount: amount * rnd(0.5, 1), sol: 0, mult, time: Date.now() - rnd(0, 5_000), sig: addr() + addr() });
+  const s = demoTrades[demoTrades.length - 1];
+  s.sol = sol * (s.amount / amount) * mult;
+}
+export function demoWallet() {
+  const positions = buildPositions(demoTrades, new Map([...coins.values()].map(c => [c.mint, (c.market?.priceUsd ?? 0) / 160])));
+  for (const p of positions) { const c = coins.get(p.mint); p.symbol = c?.symbol; p.image = c?.image; }
+  for (const t of demoTrades) t.symbol ??= coins.get(t.mint)?.symbol;
+  return {
+    address: 'DEMO-WALLET', demo: true, solUsd: 160, error: null, checkedAt: Date.now(),
+    trades: [...demoTrades].sort((a, b) => b.time - a.time), positions,
+    totals: {
+      realized: positions.reduce((s, p) => s + p.realized, 0), unrealized: positions.reduce((s, p) => s + (p.unrealized ?? 0), 0),
+      wins: demoTrades.filter(t => t.pnl > 0).length, losses: demoTrades.filter(t => t.pnl != null && t.pnl <= 0).length,
+    },
+  };
 }

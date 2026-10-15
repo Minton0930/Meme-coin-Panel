@@ -75,3 +75,29 @@ test('potential is only given to checked, lower-risk coins', async () => {
   assert.equal(potentialScore({ score: 20, coverage: 50 }, { score: 90 }), null);
   assert.equal(potentialScore({ score: 20, coverage: 90 }, { score: 80 }), Math.round(80 * 0.65 + 80 * 0.35));
 });
+
+test('potential is withheld when any red flag or an unchecked bundle remains', async () => {
+  const { potentialScore } = await import('../src/score.js');
+  const ok = { status: 'ok', key: 'mint' };
+  assert.equal(potentialScore({ score: 20, coverage: 100, factors: [ok, { key: 'bundle', status: 'bad' }] }, { score: 90 }), null);
+  assert.equal(potentialScore({ score: 20, coverage: 100, factors: [ok, { key: 'bundle', status: 'unknown' }] }, { score: 90 }), null);
+  assert.ok(potentialScore({ score: 20, coverage: 100, factors: [ok, { key: 'bundle', status: 'ok' }] }, { score: 90 }) > 0);
+});
+
+test('Token-2022 honeypot extensions are flagged', async () => {
+  const { token2022Tricks } = await import('../src/sources/solana.js');
+  const t = token2022Tricks([
+    { extension: 'permanentDelegate', state: { delegate: 'Abc' } },
+    { extension: 'transferFeeConfig', state: { newerTransferFee: { transferFeeBasisPoints: 1000 }, transferFeeConfigAuthority: 'X' } },
+    { extension: 'metadataPointer', state: {} },
+  ]);
+  assert.deepEqual(t.map(x => x.key), ['delegate', 'fee']);
+  assert.ok(t.every(x => x.bad));
+});
+
+test('a bundled launch blocks the coin', () => {
+  const now = Date.now();
+  const base = { createdAt: now, pump: {}, market: { dexId: 'pumpfun', vol1h: 0, buys5m: 0, sells5m: 0, change1h: 0 } };
+  const r = riskScore({ ...base, bundle: { wallets: 30, sameBlock: 12, pct: 28 } });
+  assert.equal(r.factors.find(f => f.key === 'bundle').status, 'bad');
+});

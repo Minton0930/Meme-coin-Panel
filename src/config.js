@@ -27,13 +27,15 @@ export const config = {
   chatModel: env('CHAT_MODEL', 'claude-opus-5-5'),
   rpcUrl: env('SOLANA_RPC_URL', 'https://api.mainnet-beta.solana.com'),
   rugcheckToken: env('RUGCHECK_TOKEN'),
+  jupiterKey: env('JUPITER_API_KEY'),
   apifyToken: env('APIFY_TOKEN'),
   apifyActor: env('APIFY_TIKTOK_ACTOR', 'clockworks~free-tiktok-scraper'),
   xBearer: env('X_BEARER_TOKEN'),
   xAccounts: list(env('X_WATCH_ACCOUNTS', 'elonmusk,realDonaldTrump,cz_binance,MrBeast,KanyeWest')),
-  newsTopics: list(env('NEWS_TOPICS', 'Elon Musk,Donald Trump')),
+  newsTopics: list(env('NEWS_TOPICS', 'Elon Musk,Donald Trump,CZ Binance,MrBeast,memecoin')),
+  wallet: env('WALLET_ADDRESS'), // public address only, for the MY TRADES page
   disablePumpportal: env('DISABLE_PUMPPORTAL') === '1',
-  disableReddit: env('DISABLE_REDDIT') === '1',
+  disableReddit: env('ENABLE_REDDIT') !== '1', // Reddit blocks keyless JSON since May 2026
   maxCoins: 400,
 };
 
@@ -46,6 +48,7 @@ export const EDITABLE = {
   X_BEARER_TOKEN: { key: 'xBearer', secret: true },
   X_WATCH_ACCOUNTS: { key: 'xAccounts', list: true },
   NEWS_TOPICS: { key: 'newsTopics', list: true },
+  WALLET_ADDRESS: { key: 'wallet' },
   APIFY_TOKEN: { key: 'apifyToken', secret: true },
 };
 

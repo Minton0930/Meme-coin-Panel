@@ -27,10 +27,12 @@ export function extractKeywords(text, { headline = false, ignore = [] } = {}) {
   };
   const t = String(text ?? '').replace(/https?:\/\/\S+/g, ' ');
   // "named Elsa", "called Floki", "meet Elsa"
-  for (const m of t.matchAll(/\b(?:named|called|name is|meet|introducing|say hi to|say hello to)\s+["“']?([A-Za-z][\w'-]{1,20}(?:\s+(?:the\s+)?[A-Z][\w'-]{1,20})?)/gi)) {
+  for (const m of t.matchAll(/\b(?:named|names it|called|name is|meet|introducing|say hi to|say hello to)\s+["“']?([A-Za-z][\w'-]{1,20}(?:\s+(?:the\s+)?[A-Z][\w'-]{1,20})?)/gi)) {
     add(m[1], true);
     m[1].split(/\s+/).forEach((part, i) => add(part, i === 0));
   }
+  // "his new dog Floki", "our puppy Mochi"
+  for (const m of t.matchAll(/\b(?:dog|puppy|cat|kitten|pet|horse|frog|hamster|son|daughter|baby|robot|rocket|ship|company|token|coin)\s+(?:named\s+|called\s+)?["“']?([A-Z][\w'-]{2,20})/g)) add(m[1], true);
   for (const m of t.matchAll(/[#$]([A-Za-z][A-Za-z0-9_]{1,20})/g)) add(m[1], true);           // #hashtag / $CASHTAG
   for (const m of t.matchAll(/["“]([^"”]{2,30})["”]/g)) { add(m[1], true); }                    // "quoted"
   for (const m of t.matchAll(/\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?)\b/g)) {                // Proper Nouns

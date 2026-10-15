@@ -5,9 +5,9 @@ import { riskScore, momentumScore } from './score.js';
 import * as dex from './sources/dexscreener.js';
 import { startPumpPortal } from './sources/pumpportal.js';
 import { rugReport } from './sources/rugcheck.js';
-import { mintInfo, topHolders, walletAge } from './sources/solana.js';
+import { mintInfo, topHolders, walletAge, bundleCheck } from './sources/solana.js';
 import { refreshCoinGecko, trendFor } from './sources/trends.js';
-import { startNewsRadar, checkCoin, setWordHook } from './sources/news.js';
+import { startNewsRadar, checkCoin, setWordHook, radarInfo } from './sources/news.js';
 import { jupiterInfo, pumpInfo, geckoTrending } from './sources/extra.js';
 
 export const coins = new Map();
@@ -110,6 +110,22 @@ async function enrichLoop() {
   }
 }
 
+// ---- Bundle check: only for coins that already look clean, because it costs
+// up to ~25 RPC calls each. A coin can't reach the feed until it has passed. ----
+let bundleBusy = false;
+async function bundleTick() {
+  if (bundleBusy) return;
+  const cand = [...coins.values()]
+    .filter(c => !c.bundle && c.chain?.supply && c.risk && c.risk.score < 50 && Date.now() - (c.createdAt ?? c.firstSeen ?? 0) < 24 * 3600_000)
+    .sort((a, b) => interest(b) - interest(a))[0];
+  if (!cand) return;
+  bundleBusy = true;
+  try { cand.bundle = await bundleCheck(cand.mint, cand.creator ?? cand.rug?.creator, cand.chain.supply); }
+  catch (e) { cand.bundle = { failed: true, checkedAt: Date.now() }; setTimeout(() => { if (cand.bundle?.failed) delete cand.bundle; }, 120_000); }
+  finally { bundleBusy = false; }
+  rescore(cand);
+}
+
 // ---- Market data: DexScreener pairs, 30 coins per call, round robin ----
 let rr = 0;
 async function marketTick() {
@@ -198,6 +214,8 @@ export const cadence = {
   rugChecks: 'each new coin queued; RugCheck ~1 per 1.5s, re-checked every ~2 min',
   trends: 'top 6 coins every 60s, cached 10 min (Reddit) / 30 min (TikTok)',
   news: 'your watch words: instant · news headlines: every 2 min',
+  get radar() { return radarInfo().cadence; },
+  bundles: 'one clean-looking coin at a time (~25 RPC calls each, faster with a free Helius RPC)',
   extra: 'Jupiter 50 coins / ~2s · pump.fun info ~3 coins/s · GeckoTerminal trending every 60s',
 };
 
@@ -209,7 +227,6 @@ export function start() {
         name: t.name, symbol: t.symbol, creator: t.creator, bondingCurve: t.bondingCurve, createdAt: t.createdAt,
         pump: { mcapSol: t.mcapSol, devBuyPct: t.devBuyPct, graduated: false }, sources: ['pump-launch'],
       }),
-      onEarly: (mint, e) => { const c = coins.get(mint); if (c) { c.early = e; rescore(c); } },
       onMigrate: mint => { const c = coins.get(mint); if (c) { c.pump = { ...(c.pump ?? {}), graduated: true }; upsert(mint, { sources: ['graduated'] }); } },
     });
   }
@@ -221,5 +238,6 @@ export function start() {
   every(2_000, jupTick, 'jupiter');
   every(400, pumpInfoTick, 'pumpinfo');
   every(60_000, gtTick, 'geckoterminal');
+  every(1_000, bundleTick, 'bundles');
   enrichLoop();
 }

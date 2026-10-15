@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join, extname, normalize } from 'node:path';
 import { config, ROOT, isPublicRpc, publicSettings, saveSettings } from './src/config.js';
 import { alerts, watchWords, addManual, removeWord, radarInfo } from './src/sources/news.js';
-import { coins, start, pin, cadence } from './src/engine.js';
+import { coins, start, pin, cadence, rugWarnings } from './src/engine.js';
 import { potentialScore, freshScore } from './src/score.js';
 import { startDemo } from './src/demo.js';
 import { handleChat } from './src/chat.js';
@@ -46,7 +46,9 @@ function summary(c) {
     mom: c.momentum?.score,
     pot: potentialScore(c.risk, c.momentum),
     // The main feed: coins that pass the potential filter AND are new or were posted/talked about.
-    feed: potentialScore(c.risk, c.momentum) != null && (Date.now() - (c.createdAt ?? m.pairCreatedAt ?? c.firstSeen ?? 0) < 2 * 3600_000 || !!c.newsMatch || !!c.gtRank),
+    // Coins under 5 minutes old only go in the JUST LAUNCHED lane, never the main feed.
+    feed: potentialScore(c.risk, c.momentum) != null && Date.now() - (c.createdAt ?? m.pairCreatedAt ?? c.firstSeen ?? 0) > 5 * 60_000
+      && (Date.now() - (c.createdAt ?? m.pairCreatedAt ?? c.firstSeen ?? 0) < 2 * 3600_000 || !!c.newsMatch || !!c.gtRank),
     bundle: c.bundle ?? null,
     fresh: freshScore(c, c.risk, c.momentum),
     devAgeDays: c.dev?.ageDays ?? null,
@@ -68,7 +70,7 @@ function sse(req, res) {
     const payload = {
       t: Date.now(), demo: config.demo, cadence, publicRpc: isPublicRpc(), newsTopics: config.newsTopics,
       chat: !!config.anthropicKey, tiktok: !!config.apifyToken, x: !!config.xBearer, xAccounts: config.xAccounts,
-      update: updateState, radar: radarInfo(),
+      update: updateState, radar: radarInfo(), rugWarnings: rugWarnings.slice(0, 10),
       alerts: alerts.slice(0, 30),
       watch: [...watchWords.values()].sort((a, b) => (b.source === 'manual') - (a.source === 'manual') || b.at - a.at).slice(0, 40)
         .map(w => ({ kw: w.kw, source: w.source, strong: w.strong, author: w.author, text: w.text?.slice(0, 160), url: w.url, at: w.at })),

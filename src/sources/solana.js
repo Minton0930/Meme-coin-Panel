@@ -131,3 +131,9 @@ export async function walletAge(address) {
     checkedAt: Date.now(),
   };
 }
+
+// How many of this coin's tokens a wallet holds right now (all its token accounts).
+export async function walletTokenBalance(owner, mint) {
+  const r = await rpc('getTokenAccountsByOwner', [owner, { mint }, { encoding: 'jsonParsed' }]);
+  return (r?.value ?? []).reduce((s, a) => s + Number(a.account?.data?.parsed?.info?.tokenAmount?.uiAmount ?? 0), 0);
+}

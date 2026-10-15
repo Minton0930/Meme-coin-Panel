@@ -109,7 +109,12 @@ $('#watchForm').addEventListener('submit', e => {
 // ---------- Just launched lane ----------
 const seenFresh = new Set();
 const ageSec = t => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? `${s | 0}s` : `${(s / 60) | 0}m${String((s % 60) | 0).padStart(2, '0')}`; };
+let showFresh = false;
+try { showFresh = localStorage.getItem('showFresh') === '1'; } catch {}
+$('#showFresh').checked = showFresh;
+$('#showFresh').addEventListener('change', e => { showFresh = e.target.checked; try { localStorage.setItem('showFresh', showFresh ? '1' : '0'); } catch {} renderFresh(); });
 function renderFresh() {
+  if (!showFresh) { $('#freshCount').textContent = ''; $('#freshLane').innerHTML = '<div class="emptymsg">Hidden. Coins this new can be rugged in seconds, and most are. Tick SHOW only if you accept that risk.</div>'; return; }
   const list = state.coins.filter(c => c.fresh != null).sort((a, b) => b.createdAt - a.createdAt).slice(0, 12);
   const under1 = list.filter(c => Date.now() - c.createdAt < 60_000).length;
   $('#freshCount').textContent = `[${list.length} · ${under1} under 1 min]`;
@@ -169,14 +174,26 @@ $('#feed').addEventListener('click', e => {
 
 // ---------- Alerts: siren for big-account matches, beep for new feed coins ----------
 function checkAlerts() {
-  let siren = null, newFeed = 0;
+  let hit = null, newFeed = 0;
   for (const a of state.alerts) {
     if (alerted.has('n' + a.id)) continue;
     alerted.add('n' + a.id);
-    if (!firstFrame && Date.now() - a.at < 60_000 && a.strong) siren ??= a;
+    if (!firstFrame && Date.now() - a.at < 60_000 && a.strong) hit ??= a;
   }
-  for (const c of state.coins) if ((c.feed || c.fresh != null) && !alerted.has('f' + c.mint)) { alerted.add('f' + c.mint); if (!firstFrame) newFeed++; }
-  if (siren) showSiren(siren);
+  for (const c of state.coins) if ((c.feed || (showFresh && c.fresh != null)) && !alerted.has('f' + c.mint)) { alerted.add('f' + c.mint); if (!firstFrame) newFeed++; }
+  // A coin we showed just tripped the rug watchdog (dev sold, top wallets dumping).
+  for (const r of state.rugWarnings ?? []) {
+    const k = 'r' + r.mint + r.at;
+    if (alerted.has(k)) continue;
+    alerted.add(k);
+    if (firstFrame || Date.now() - r.at > 60_000) continue;
+    const bar = $('#rugbar');
+    bar.hidden = false;
+    bar.innerHTML = `<span>⚠ RUG WARNING <b>$${esc(r.symbol)}</b>: ${esc(r.why)}. Removed from the feed.</span><button class="btn">CLOSE</button>`;
+    bar.querySelector('button').onclick = () => { bar.hidden = true; };
+    if ($('#sound').checked) siren();
+  }
+  if (hit) showSiren(hit);
   else if (newFeed && $('#sound').checked) beep();
 }
 

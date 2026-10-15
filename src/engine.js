@@ -5,7 +5,8 @@ import { riskScore, momentumScore } from './score.js';
 import * as dex from './sources/dexscreener.js';
 import { startPumpPortal } from './sources/pumpportal.js';
 import { rugReport } from './sources/rugcheck.js';
-import { mintInfo, topHolders, walletAge, bundleCheck } from './sources/solana.js';
+import { mintInfo, topHolders, walletAge, bundleCheck, walletTokenBalance } from './sources/solana.js';
+import { potentialScore, freshScore } from './score.js';
 import { refreshCoinGecko, trendFor } from './sources/trends.js';
 import { startNewsRadar, checkCoin, setWordHook, radarInfo } from './sources/news.js';
 import { jupiterInfo, pumpInfo, geckoTrending } from './sources/extra.js';
@@ -130,6 +131,54 @@ async function bundleTick() {
   rescore(cand);
 }
 
+// ---- Rug watchdog: coins on screen are re-checked every ~20s for the moves
+// that come right before or during a rug: the dev selling, a top wallet
+// dumping. A coin that trips one leaves the feed and raises a RUG WARNING. ----
+export const rugWarnings = []; // newest first
+let watchBusy = false;
+async function watchdogTick() {
+  if (watchBusy) return;
+  const shown = c => potentialScore(c.risk, c.momentum) != null || freshScore(c, c.risk, c.momentum) != null || c.watch;
+  const next = [...coins.values()].filter(c => shown(c) && Date.now() - (c.watch?.at ?? 0) > 20_000)
+    .sort((a, b) => (a.watch?.at ?? 0) - (b.watch?.at ?? 0))[0];
+  if (!next) return;
+  watchBusy = true;
+  try {
+    const w = next.watch ?? { devPeak: 0, holders: null };
+    const supply = next.chain?.supply ?? (/pump$/.test(next.mint) ? 1e9 : null);
+    const creator = next.creator ?? next.rug?.creator;
+    if (creator && supply) {
+      const bal = await walletTokenBalance(creator, next.mint);
+      const pct = (bal / supply) * 100;
+      w.devPeak = Math.max(w.devPeak, pct, next.pump?.devBuyPct ?? 0);
+      w.devNow = pct;
+      // Dev sold half or more of what they held (and it was a real amount).
+      w.devSold = w.devPeak >= 0.3 && pct < w.devPeak * 0.5;
+    }
+    if (supply) {
+      const exclude = [next.bondingCurve, next.market?.pairAddress, '5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1'].filter(Boolean);
+      const now = await topHolders(next.mint, supply, exclude);
+      if (w.holders) {
+        // A wallet that held 2%+ on the last check and has sold most of it since.
+        const dumped = w.holders.filter(h => h.pct >= 2 && (now.find(x => x.address === h.address)?.pct ?? 0) < h.pct * 0.4);
+        w.dumpers = dumped.length;
+        w.dumpedPct = dumped.reduce((s, h) => s + h.pct, 0);
+      }
+      w.holders = now.slice(0, 15);
+      next.chain = { ...(next.chain ?? {}), holders: now };
+    }
+    w.at = Date.now();
+    next.watch = w;
+    const wasShown = potentialScore(next.risk, next.momentum) != null || freshScore(next, next.risk, next.momentum) != null;
+    rescore(next);
+    if (wasShown && (w.devSold || w.dumpedPct >= 4)) {
+      rugWarnings.unshift({ at: Date.now(), mint: next.mint, symbol: next.symbol, why: w.devSold ? `dev sold (held ${w.devPeak.toFixed(1)}%, now ${w.devNow.toFixed(1)}%)` : `${w.dumpers} top wallets dumped ${w.dumpedPct.toFixed(1)}% of supply` });
+      if (rugWarnings.length > 50) rugWarnings.pop();
+    }
+  } catch { next.watch = { ...(next.watch ?? { devPeak: 0 }), at: Date.now() }; }
+  finally { watchBusy = false; }
+}
+
 // ---- Market data: DexScreener pairs, 30 coins per call, round robin ----
 let rr = 0;
 async function marketTick() {
@@ -248,5 +297,6 @@ export function start() {
   every(400, pumpInfoTick, 'pumpinfo');
   every(60_000, gtTick, 'geckoterminal');
   every(1_000, bundleTick, 'bundles');
+  every(1_500, watchdogTick, 'watchdog');
   enrichLoop();
 }

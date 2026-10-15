@@ -115,14 +115,22 @@ export function riskScore(c) {
   }
   if (jup?.isSus) f.push(factor('rcdanger', 'Jupiter marks it suspicious', 15, 'bad', 15, 'Jupiter audit flag: suspicious token'));
 
+  // Live watchdog findings (engine.js re-checks coins on screen every ~20s).
+  const w = c.watch;
+  if (w?.devSold) f.push(factor('devsold', 'Dev dumped', 30, 'bad', 30, `Dev held ${fmtPct(w.devPeak)}, now ${fmtPct(w.devNow)}`));
+  if (w?.dumpedPct >= 4) f.push(factor('dumpers', 'Top wallets dumping', 25, 'bad', 25, `${w.dumpers} top wallets sold ${fmtPct(w.dumpedPct)} of supply since the last check`));
+  else if (w?.dumpedPct >= 2) f.push(factor('dumpers', 'Top wallets selling', 25, 'warn', 8, `${w.dumpers} top wallet(s) sold ${fmtPct(w.dumpedPct)} of supply since the last check`));
+
   if (rug?.insidersDetected) f.push(factor('rcinsider', 'Insider network (RugCheck)', 8, 'warn', Math.min(8, rug.insidersDetected), `${rug.insidersDetected} linked insider wallets detected`));
 
   // 7. Market behaviour.
   if (m && (m.buys5m + m.sells5m) > 20) {
     const ratio = m.sells5m / Math.max(1, m.buys5m);
-    if (ratio > 2) f.push(factor('dump', 'Sell pressure (5m)', 6, 'warn', 6, `${m.sells5m} sells vs ${m.buys5m} buys`));
+    if (ratio > 1.7 && m.sells5m > 40) f.push(factor('dump', 'Heavy selling (5m)', 20, 'bad', 20, `${m.sells5m} sells vs ${m.buys5m} buys`));
+    else if (ratio > 1.5) f.push(factor('dump', 'Sell pressure (5m)', 6, 'warn', 6, `${m.sells5m} sells vs ${m.buys5m} buys`));
   }
-  if (m && m.change1h < -60) f.push(factor('crash', 'Price crash (1h)', 8, 'bad', 8, `${m.change1h.toFixed(0)}% in 1h`));
+  if (m && m.change5m < -35) f.push(factor('crash', 'Price crash (5m)', 20, 'bad', 20, `${m.change5m.toFixed(0)}% in 5 minutes`));
+  else if (m && m.change1h < -60) f.push(factor('crash', 'Price crash (1h)', 8, 'bad', 8, `${m.change1h.toFixed(0)}% in 1h`));
   const hc = rug?.totalHolders ?? jup?.holders;
   if (hc != null && hc < 50) f.push(factor('holders', 'Holder count', 5, 'warn', 5, `${hc} holders`));
 
@@ -131,7 +139,7 @@ export function riskScore(c) {
   if (dangers.length) f.push(factor('rcdanger', 'Other RugCheck dangers', 15, 'bad', Math.min(15, dangers.length * 5), dangers.map(d => d.name).join(', ')));
 
   let score = f.reduce((s, x) => s + x.points, 0);
-  const hardFail = rug?.rugged || mintAuth || frz || early?.devSoldAll || (ch?.tricks ?? []).some(t => t.bad);
+  const hardFail = rug?.rugged || mintAuth || frz || early?.devSoldAll || w?.devSold || w?.dumpedPct >= 4 || (ch?.tricks ?? []).some(t => t.bad);
   if (rug?.rugged) { score = 100; f.unshift(factor('rugged', 'Marked RUGGED', 100, 'bad', 100, 'RugCheck marks this token as rugged')); }
   score = Math.min(100, score);
   if (hardFail) score = Math.max(score, 60);
@@ -210,6 +218,15 @@ export function freshScore(c, risk, mom) {
   if (fs.some(x => x.status === 'bad')) return null;
   const st = k => fs.find(x => x.key === k)?.status;
   if (!st('bundle') || st('bundle') === 'unknown' || st('devage') === 'unknown' || !st('devage')) return null;
+  // Learned from two rugs (Oct 15): both were minutes old, had no X or website,
+  // never grew past ~$3k, and were dumped. So a just-launched coin now also needs
+  // socials, real growth, and more buyers than sellers.
+  const soc0 = c.info ?? c.jup ?? {};
+  if (!soc0.twitter && !soc0.website) return null;
+  const now0 = c.info?.usdMcap ?? c.market?.mcap, first0 = c.firstMcapUsd;
+  if (!now0 || now0 < 8_000 || !first0 || now0 < first0 * 1.3) return null;
+  const mk = c.market;
+  if (mk && mk.buys5m + mk.sells5m > 10 && mk.sells5m >= mk.buys5m) return null;
   let s = 45 - risk.score / 2;
   const now = c.info?.usdMcap ?? c.market?.mcap, first = c.firstMcapUsd;
   if (now && first) s += Math.max(-15, Math.min(25, (now / first - 1) * 25));

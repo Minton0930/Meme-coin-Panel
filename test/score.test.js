@@ -105,9 +105,17 @@ test('a bundled launch blocks the coin', () => {
 test('just-launched score needs the bundle and dev checks done and no red flag', async () => {
   const { freshScore } = await import('../src/score.js');
   const c = { pump: {}, createdAt: Date.now() - 30_000, firstMcapUsd: 5000, info: { usdMcap: 10000, twitter: 'x' } };
+  assert.equal(freshScore({ ...c, info: { usdMcap: 10000 } }, { score: 10, factors: [{ key: 'bundle', status: 'ok' }, { key: 'devage', status: 'ok' }] }, {}), null, 'no socials');
+  assert.equal(freshScore({ ...c, info: { usdMcap: 3100, twitter: 'x' } }, { score: 10, factors: [{ key: 'bundle', status: 'ok' }, { key: 'devage', status: 'ok' }] }, {}), null, 'no growth');
   const okRisk = { score: 10, factors: [{ key: 'bundle', status: 'ok' }, { key: 'devage', status: 'warn' }] };
   assert.ok(freshScore(c, okRisk, { score: 40 }) > 0);
   assert.equal(freshScore(c, { score: 10, factors: [{ key: 'bundle', status: 'unknown' }, { key: 'devage', status: 'ok' }] }, {}), null);
   assert.equal(freshScore(c, { score: 10, factors: [{ key: 'bundle', status: 'ok' }, { key: 'devage', status: 'bad' }] }, {}), null);
   assert.equal(freshScore({ ...c, createdAt: Date.now() - 10 * 60_000 }, okRisk, {}), null);
+});
+
+test('a 5-minute crash with heavy selling is a red flag', () => {
+  const r = riskScore({ createdAt: Date.now(), market: { dexId: 'pumpfun', change5m: -74, change1h: -5, buys5m: 116, sells5m: 218, vol1h: 14000 } });
+  assert.ok(r.factors.some(f => f.key === 'crash' && f.status === 'bad'));
+  assert.ok(r.factors.some(f => f.key === 'dump' && f.status === 'bad'));
 });

@@ -28,6 +28,7 @@
 </header>
 
 <div id="siren" class="siren" hidden></div>
+<div id="rugbar" class="rugbar" hidden></div>
 
 <main id="feedView" class="view">
   <section class="radar">
@@ -40,7 +41,8 @@
 
   <div class="feedhead">
     <span class="ttl fresh">⚡ JUST LAUNCHED <span id="freshCount" class="dim"></span></span>
-    <span class="dim">under 5 minutes old, newest first · passed the fast checks: no launch bundle, dev wallet, dev history · riskier than the feed below</span>
+    <label class="chk danger"><input type="checkbox" id="showFresh"> SHOW (very risky)</label>
+    <span class="dim">coins under 5 minutes old. Holder and liquidity checks can't run this early, and most rugs happen in these minutes.</span>
   </div>
   <div id="freshLane" class="lane"></div>
 

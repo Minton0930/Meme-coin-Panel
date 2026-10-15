@@ -1,6 +1,6 @@
 // Demo mode: synthetic coins so the dashboard can be tried with no network.
 // Everything shown in demo mode is fake and labelled as such in the UI.
-import { coins, upsert, rescore } from './engine.js';
+import { coins, upsert, rescore, rugWarnings } from './engine.js';
 import { addWatchWord, checkCoin } from './sources/news.js';
 import { buildPositions } from './wallet.js';
 
@@ -84,6 +84,14 @@ export function startDemo() {
   for (let i = 0; i < 40; i++) spawn();
   setInterval(() => Math.random() < 0.6 && spawn(null, true), 1_500);
   setInterval(drift, 1_000);
+  // Every ~45s one coin on screen gets a fake dev dump so the RUG WARNING can be seen.
+  setInterval(() => {
+    const c = pick([...coins.values()].filter(x => x.risk?.score < 50));
+    if (!c) return;
+    c.watch = { devPeak: 4, devNow: 0.2, devSold: true, at: Date.now() };
+    rescore(c);
+    rugWarnings.unshift({ at: Date.now(), mint: c.mint, symbol: c.symbol, why: 'DEMO: dev sold (held 4.0%, now 0.2%)' });
+  }, 45_000);
   setTimeout(() => { for (let i = 0; i < 5; i++) fakeTrade(); setInterval(fakeTrade, 35_000); }, 3_000);
 }
 

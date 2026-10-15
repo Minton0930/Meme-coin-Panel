@@ -41,3 +41,20 @@ There is no free, reliable live feed of X posts in October 2026. Nitter was shut
 - Words you type yourself, instantly.
 
 Elon's own X posts reach the app only through news channels and headlines, usually within minutes. Reading X directly needs a paid X API key.
+
+## Two real rugs (15 Oct 2026) and what changed
+
+| Coin | What the data showed (DexScreener, ~5 min after launch) |
+|---|---|
+| CURVO, `GqtC…pump` | Launched 19:48 UTC, still on the pump.fun curve, no X or website, market cap about $3.1k (never grew), 48 sells vs 55 buys |
+| Quantum Computing, `EBpG…pump` | Launched 19:51 UTC, no X or website, **−74% in 5 minutes**, 218 sells vs 116 buys |
+
+Both were only minutes old, so they came through JUST LAUNCHED, which skips holder and liquidity checks because they can't run that early. Changes in v0.5.2:
+
+- JUST LAUNCHED is **hidden by default** behind a "SHOW (very risky)" tick box.
+- A just-launched coin now also needs an X or website, market cap of at least $8k and 30%+ growth since launch, and more buyers than sellers.
+- Coins under 5 minutes old never appear in the main feed.
+- **Rug watchdog:** every coin on screen is re-checked about every 20s. If the dev sells half of what they held, or top wallets dump 4%+ of supply, the coin is flagged red, removed, and a red RUG WARNING banner and siren go off.
+- A 35%+ drop in 5 minutes, or sells running 1.7x buys (40+ sells), is now a red flag.
+
+What still can't be caught: a dev or insider can sell everything in one transaction between two checks. Nothing reading public data can warn you before that first sell. In these cases, the only defence is position size.

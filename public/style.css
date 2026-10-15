@@ -93,6 +93,10 @@ input:focus { border-color: var(--green); }
 .kv { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
 .kv div { border: 1px solid var(--line); padding: 2px 5px; min-width: 0; }
 .kv i { display: block; font-style: normal; color: var(--dim); font-size: 9px; letter-spacing: 1px; }
+.chk.danger { color: var(--red); font-weight: 600; }
+.rugbar { position: relative; z-index: 44; padding: 9px 16px; background: #3a0010; border-bottom: 2px solid var(--red); color: #ffd0d8; display: flex; gap: 12px; align-items: center; animation: rugflash .5s 6; }
+.rugbar b { color: #fff; }
+@keyframes rugflash { 50% { background: var(--red); } }
 .ttl.fresh { color: var(--amber); font-size: 15px; }
 .lane { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(230px, 1fr); gap: 8px; overflow-x: auto; padding-bottom: 4px; }
 .lane > * { min-width: 0; }

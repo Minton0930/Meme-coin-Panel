@@ -1,6 +1,6 @@
 {
   "name": "memecoin-analyzer",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Solana memecoin rug-risk analyzer with live feed, trend signal and AI chat. Analysis only: never trades, never holds keys.",
   "type": "module",
   "main": "server.js",

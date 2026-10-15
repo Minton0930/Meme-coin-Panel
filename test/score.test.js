@@ -101,3 +101,13 @@ test('a bundled launch blocks the coin', () => {
   const r = riskScore({ ...base, bundle: { wallets: 30, sameBlock: 12, pct: 28 } });
   assert.equal(r.factors.find(f => f.key === 'bundle').status, 'bad');
 });
+
+test('just-launched score needs the bundle and dev checks done and no red flag', async () => {
+  const { freshScore } = await import('../src/score.js');
+  const c = { pump: {}, createdAt: Date.now() - 30_000, firstMcapUsd: 5000, info: { usdMcap: 10000, twitter: 'x' } };
+  const okRisk = { score: 10, factors: [{ key: 'bundle', status: 'ok' }, { key: 'devage', status: 'warn' }] };
+  assert.ok(freshScore(c, okRisk, { score: 40 }) > 0);
+  assert.equal(freshScore(c, { score: 10, factors: [{ key: 'bundle', status: 'unknown' }, { key: 'devage', status: 'ok' }] }, {}), null);
+  assert.equal(freshScore(c, { score: 10, factors: [{ key: 'bundle', status: 'ok' }, { key: 'devage', status: 'bad' }] }, {}), null);
+  assert.equal(freshScore({ ...c, createdAt: Date.now() - 10 * 60_000 }, okRisk, {}), null);
+});

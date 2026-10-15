@@ -198,3 +198,27 @@ export function potentialScore(risk, mom) {
   if (fs.some(x => x.key === 'bundle' && x.status === 'unknown')) return null;
   return Math.round((mom?.score ?? 0) * 0.65 + (100 - risk.score) * 0.35);
 }
+
+// JUST LAUNCHED lane (coins under 5 minutes old). Most full checks need time,
+// so this uses the ones that work in the first seconds: launch bundle, dev
+// wallet age and history, dev's own buy, authorities, plus early growth.
+// A coin with any red flag, or whose bundle/dev checks aren't done, gets null.
+export function freshScore(c, risk, mom) {
+  const age = Date.now() - (c.createdAt ?? c.firstSeen ?? 0);
+  if (!risk || !c.pump || age > 5 * 60_000 || risk.score >= 50) return null;
+  const fs = risk.factors ?? [];
+  if (fs.some(x => x.status === 'bad')) return null;
+  const st = k => fs.find(x => x.key === k)?.status;
+  if (!st('bundle') || st('bundle') === 'unknown' || st('devage') === 'unknown' || !st('devage')) return null;
+  let s = 45 - risk.score / 2;
+  const now = c.info?.usdMcap ?? c.market?.mcap, first = c.firstMcapUsd;
+  if (now && first) s += Math.max(-15, Math.min(25, (now / first - 1) * 25));
+  const soc = c.info ?? c.jup ?? {};
+  if (soc.twitter) s += 8;
+  if (soc.website) s += 4;
+  if ((c.info?.replies ?? 0) > 5) s += 5;
+  if (c.info?.kingOfHill) s += 10;
+  if (c.newsMatch) s += 15;
+  s += Math.min(10, (mom?.score ?? 0) / 8);
+  return Math.max(1, Math.min(99, Math.round(s)));
+}

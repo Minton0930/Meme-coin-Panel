@@ -74,6 +74,7 @@ es.onmessage = ev => {
   state = JSON.parse(ev.data);
   renderTop();
   renderRadar();
+  renderFresh();
   renderFeed();
   checkAlerts();
   firstFrame = false;
@@ -103,6 +104,35 @@ $('#watchForm').addEventListener('submit', e => {
   const w = $('#watchInput').value.trim();
   if (w) post('/api/watch', { word: w });
   $('#watchInput').value = '';
+});
+
+// ---------- Just launched lane ----------
+const seenFresh = new Set();
+const ageSec = t => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? `${s | 0}s` : `${(s / 60) | 0}m${String((s % 60) | 0).padStart(2, '0')}`; };
+function renderFresh() {
+  const list = state.coins.filter(c => c.fresh != null).sort((a, b) => b.createdAt - a.createdAt).slice(0, 12);
+  const under1 = list.filter(c => Date.now() - c.createdAt < 60_000).length;
+  $('#freshCount').textContent = `[${list.length} · ${under1} under 1 min]`;
+  if (!list.length) {
+    const young = state.coins.filter(c => Date.now() - (c.createdAt ?? 0) < 5 * 60_000).length;
+    $('#freshLane').innerHTML = `<div class="emptymsg">${young} coins launched in the last 5 minutes. None has passed the fast checks yet (most are bundled or made by brand-new dev wallets).</div>`;
+    return;
+  }
+  $('#freshLane').innerHTML = list.map(c => {
+    const isNew = !seenFresh.has(c.mint) && !firstFrame; seenFresh.add(c.mint);
+    return `<div class="fcoin ${isNew ? 'fresh' : ''}" data-m="${esc(c.mint)}">
+      <div class="tok">${coinImg(c)}<div style="min-width:0"><div class="t1"><b>$${esc(c.symbol ?? '???')}</b></div><div class="nm">${esc(c.name)}</div></div>
+        <div class="agebig"><small>AGE</small>${ageSec(c.createdAt)}</div></div>
+      ${linkRow(c)}
+      <div class="r"><span>early score <b class="pot">${c.fresh}</b></span>${riskBadge(c.risk, c.grade)}</div>
+      <div class="r dim"><span>mcap $${num(c.mcap)} ${c.growth != null ? pct(c.growth, 0) : ''}</span><span>bundle ${c.bundle?.pct != null ? c.bundle.pct.toFixed(1) + '%' : '–'}</span></div>
+      ${c.news ? `<div class="post">◉ ${esc(c.news.author ?? 'news')}: "${esc(c.news.keyword)}"</div>` : ''}
+    </div>`;
+  }).join('');
+}
+$('#freshLane').addEventListener('click', e => {
+  if (e.target.closest('a')) return;
+  const el = e.target.closest('[data-m]'); if (el) select(el.dataset.m);
 });
 
 // ---------- The feed ----------
@@ -145,7 +175,7 @@ function checkAlerts() {
     alerted.add('n' + a.id);
     if (!firstFrame && Date.now() - a.at < 60_000 && a.strong) siren ??= a;
   }
-  for (const c of state.coins) if (c.feed && !alerted.has('f' + c.mint)) { alerted.add('f' + c.mint); if (!firstFrame) newFeed++; }
+  for (const c of state.coins) if ((c.feed || c.fresh != null) && !alerted.has('f' + c.mint)) { alerted.add('f' + c.mint); if (!firstFrame) newFeed++; }
   if (siren) showSiren(siren);
   else if (newFeed && $('#sound').checked) beep();
 }

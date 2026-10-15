@@ -4,7 +4,7 @@ import { join, extname, normalize } from 'node:path';
 import { config, ROOT, isPublicRpc, publicSettings, saveSettings } from './src/config.js';
 import { alerts, watchWords, addManual, removeWord, radarInfo } from './src/sources/news.js';
 import { coins, start, pin, cadence } from './src/engine.js';
-import { potentialScore } from './src/score.js';
+import { potentialScore, freshScore } from './src/score.js';
 import { startDemo } from './src/demo.js';
 import { handleChat } from './src/chat.js';
 import { statusSnapshot } from './src/http.js';
@@ -48,6 +48,9 @@ function summary(c) {
     // The main feed: coins that pass the potential filter AND are new or were posted/talked about.
     feed: potentialScore(c.risk, c.momentum) != null && (Date.now() - (c.createdAt ?? m.pairCreatedAt ?? c.firstSeen ?? 0) < 2 * 3600_000 || !!c.newsMatch || !!c.gtRank),
     bundle: c.bundle ?? null,
+    fresh: freshScore(c, c.risk, c.momentum),
+    devAgeDays: c.dev?.ageDays ?? null,
+    growth: c.firstMcapUsd && (c.info?.usdMcap ?? m.mcap) ? ((c.info?.usdMcap ?? m.mcap) / c.firstMcapUsd - 1) * 100 : null,
     why: c.momentum?.reasons?.slice(0, 2),
     organic: c.jup?.organicScore != null ? Math.round(c.jup.organicScore) : null,
     gtRank: c.gtRank ?? null,

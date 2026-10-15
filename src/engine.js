@@ -55,7 +55,8 @@ function evict() {
 
 function interest(c) {
   const age = (Date.now() - (c.createdAt ?? c.firstSeen)) / 60_000;
-  return (c.market?.vol5m ?? 0) / 100 + (c.momentum?.score ?? 0) * 5 - age;
+  // Coins in their first ~90 seconds jump the queue so the JUST LAUNCHED lane gets checked fast.
+  return (c.market?.vol5m ?? 0) / 100 + (c.momentum?.score ?? 0) * 5 - age + (age < 1.5 ? 60 : 0);
 }
 
 // ---- Enrichment: on-chain + RugCheck + dev wallet, one coin at a time ----
@@ -115,12 +116,15 @@ async function enrichLoop() {
 let bundleBusy = false;
 async function bundleTick() {
   if (bundleBusy) return;
+  // Brand-new pump.fun coins (supply is always 1B) are checked first, then older clean-looking coins.
+  const ageOf = c => Date.now() - (c.createdAt ?? c.firstSeen ?? 0);
+  const fresh = c => /pump$/.test(c.mint) && ageOf(c) < 180_000 && ageOf(c) > 4_000;
   const cand = [...coins.values()]
-    .filter(c => !c.bundle && c.chain?.supply && c.risk && c.risk.score < 50 && Date.now() - (c.createdAt ?? c.firstSeen ?? 0) < 24 * 3600_000)
-    .sort((a, b) => interest(b) - interest(a))[0];
+    .filter(c => !c.bundle && (fresh(c) || (c.chain?.supply && c.risk && c.risk.score < 50 && ageOf(c) < 24 * 3600_000)))
+    .sort((a, b) => (fresh(b) - fresh(a)) || interest(b) - interest(a))[0];
   if (!cand) return;
   bundleBusy = true;
-  try { cand.bundle = await bundleCheck(cand.mint, cand.creator ?? cand.rug?.creator, cand.chain.supply); }
+  try { cand.bundle = await bundleCheck(cand.mint, cand.creator ?? cand.rug?.creator, cand.chain?.supply ?? 1e9); }
   catch (e) { cand.bundle = { failed: true, checkedAt: Date.now() }; setTimeout(() => { if (cand.bundle?.failed) delete cand.bundle; }, 120_000); }
   finally { bundleBusy = false; }
   rescore(cand);
@@ -170,10 +174,15 @@ async function jupTick() {
 
 // pump.fun coin page data (image, socials, comments) for pump coins, one at a time.
 async function pumpInfoTick() {
-  const next = [...coins.values()].filter(c => /pump$/.test(c.mint) && (!c.info || Date.now() - c.info.checkedAt > 5 * 60_000))
+  // Coins under 3 minutes old are re-read every 15s to see how fast they grow.
+  const due = c => !c.info || Date.now() - c.info.checkedAt > (Date.now() - (c.createdAt ?? c.firstSeen) < 180_000 ? 15_000 : 5 * 60_000);
+  const next = [...coins.values()].filter(c => /pump$/.test(c.mint) && due(c))
     .sort((a, b) => interest(b) - interest(a))[0];
   if (!next) return;
-  try { next.info = await pumpInfo(next.mint); next.image ??= next.info.image; }
+  try {
+    next.info = await pumpInfo(next.mint); next.image ??= next.info.image;
+    if (next.info.usdMcap) next.firstMcapUsd ??= next.info.usdMcap;
+  }
   catch { next.info = { checkedAt: Date.now(), failed: true }; }
   rescore(next);
 }

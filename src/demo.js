@@ -11,16 +11,17 @@ const pick = a => a[Math.floor(Math.random() * a.length)];
 const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 const addr = () => Array.from({ length: 44 }, () => pick(B58)).join('');
 
-function spawn(forced) {
+function spawn(forced, live) {
   const mint = addr().slice(0, 40) + 'pump';
   const sym = forced ?? pick(WORDS) + pick(SUF);
   const shady = Math.random() < 0.45;
-  const graduated = !forced && Math.random() < 0.4;
+  const graduated = !forced && !live && Math.random() < 0.4;
   const top = Array.from({ length: 12 }, () => ({ address: addr(), pct: shady ? rnd(0.8, 7) : rnd(0.3, 3), insider: shady && Math.random() < 0.3 })).sort((a, b) => b.pct - a.pct);
-  const created = forced ? Date.now() : Date.now() - rnd(0, graduated ? 6 * 3600_000 : 600_000);
+  const created = forced || live ? Date.now() - rnd(0, 3_000) : Date.now() - rnd(0, graduated ? 6 * 3600_000 : 600_000);
   const devAge = shady ? rnd(0.02, 3) : rnd(5, 900);
   const mcap = graduated ? rnd(80_000, 8_000_000) : rnd(4_000, 60_000);
   upsert(mint, {
+    firstMcapUsd: mcap * rnd(0.45, 1.1),
     demo: true, name: `${sym} (demo)`, symbol: sym, creator: addr(), createdAt: created,
     sources: [graduated ? 'graduated' : 'pump-launch'],
     pump: { graduated, devBuyPct: rnd(0, shady ? 12 : 3) },
@@ -81,7 +82,7 @@ export function startDemo() {
   setTimeout(fakeNews, 8_000);
   setInterval(fakeNews, 40_000);
   for (let i = 0; i < 40; i++) spawn();
-  setInterval(() => Math.random() < 0.6 && spawn(), 1_500);
+  setInterval(() => Math.random() < 0.6 && spawn(null, true), 1_500);
   setInterval(drift, 1_000);
   setTimeout(() => { for (let i = 0; i < 5; i++) fakeTrade(); setInterval(fakeTrade, 35_000); }, 3_000);
 }

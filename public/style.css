@@ -93,6 +93,18 @@ input:focus { border-color: var(--green); }
 .kv { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
 .kv div { border: 1px solid var(--line); padding: 2px 5px; min-width: 0; }
 .kv i { display: block; font-style: normal; color: var(--dim); font-size: 9px; letter-spacing: 1px; }
+.ttl.fresh { color: var(--amber); font-size: 15px; }
+.lane { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(230px, 1fr); gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.lane > * { min-width: 0; }
+.fcoin { background: var(--panel); border: 1px solid #5a4300; padding: 8px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; position: relative; }
+.fcoin:hover { border-color: var(--amber); box-shadow: 0 0 14px rgba(255,176,0,.2); }
+.fcoin.fresh { animation: freshA 2s ease-out; }
+@keyframes freshA { from { background: rgba(255,176,0,.25) } to { background: var(--panel) } }
+.fcoin .tok img, .fcoin .tok .ph { width: 34px; height: 34px; }
+.fcoin .agebig { margin-left: auto; text-align: right; flex: none; color: var(--amber); font-weight: 800; font-size: 18px; line-height: 1; }
+.fcoin .agebig small { display: block; color: var(--dim); font-size: 9px; font-weight: 400; letter-spacing: 1px; }
+.fcoin .r { display: flex; justify-content: space-between; font-size: 11px; gap: 6px; }
+.lane .emptymsg { grid-column: auto; padding: 14px; }
 .emptymsg { color: var(--dim); padding: 30px 10px; text-align: center; grid-column: 1 / -1; border: 1px dashed var(--line2); }
 
 /* Siren banner */

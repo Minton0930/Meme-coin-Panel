@@ -37,6 +37,7 @@ Optional, in **⚙ SETTINGS**:
 ## What's on the screen
 
 - **Siren:** when a built-in big account (Trump on Truth Social, WatcherGuru, Lookonchain, Whale Alert, plus headlines about Elon Musk, Trump, CZ and MrBeast) posts a name and a coin with that name launches, a flashing banner and a loud siren go off. It shows how many seconds after the post the coin launched, and its rug risk. Copycats launch fast, so check first.
+- **Just launched:** coins from their first seconds up to 5 minutes old, newest first, that passed the fast checks (no launch bundle, dev wallet not brand new, dev not a serial launcher, no red flag). They get an early score from growth since launch, socials, comments and news matches. These are riskier than the main feed because holder and liquidity checks need more time.
 - **High potential feed:** the only list. It shows coins that are new (under 2 hours) or being posted or talked about, **and** pass every check: LOW or MEDIUM risk, most checks done, no red flag at all, and no big bundle at launch. The feed can be quiet. That's the filter doing its job.
 - **Coin check:** click a coin for its picture, description, every link (X, Telegram, website, the post, pump.fun, chart, RugCheck, Bubblemaps, Solscan), the three scores and "What we found" in plain English.
 - **My trades:** add your wallet address and see every swap with what you spent, what you got back, profit taken and open profit. Each winning sell gets a printed **profit receipt** with a stamp and a sound. New winning sells pop the receipt automatically.

@@ -2,6 +2,7 @@
 // Everything shown in demo mode is fake and labelled as such in the UI.
 import { coins, upsert, rescore } from './engine.js';
 import { addWatchWord, checkCoin } from './sources/news.js';
+import { buildPositions } from './wallet.js';
 
 const WORDS = ['PEPE', 'DOGE', 'CAT', 'FROG', 'MOON', 'BONK', 'WIF', 'GIGA', 'CHAD', 'SIGMA', 'SKIBIDI', 'RIZZ', 'GOAT', 'HAMSTER', 'PNUT', 'MOODENG', 'FWOG', 'POPCAT', 'BRETT', 'TURBO'];
 const SUF = ['', 'INU', 'AI', '2.0', 'CEO', 'KING', 'WIFHAT', 'SOL'];
@@ -81,4 +82,33 @@ export function startDemo() {
   for (let i = 0; i < 40; i++) spawn();
   setInterval(() => Math.random() < 0.6 && spawn(), 1_500);
   setInterval(drift, 1_000);
+  setTimeout(() => { for (let i = 0; i < 5; i++) fakeTrade(); setInterval(fakeTrade, 35_000); }, 3_000);
+}
+
+// Fake trades for the MY TRADES page in demo mode. A new fake sell lands every ~35s.
+const demoTrades = [];
+function fakeTrade() {
+  const list = [...coins.values()].filter(c => c.market?.priceUsd);
+  if (!list.length) return;
+  const c = pick(list);
+  const sol = rnd(0.1, 2), amount = sol / (c.market.priceUsd / 160);
+  const t0 = Date.now() - rnd(60_000, 3600_000);
+  demoTrades.push({ side: 'buy', mint: c.mint, symbol: c.symbol, amount, sol, time: t0, sig: addr() + addr() });
+  const mult = Math.random() < 0.65 ? rnd(1.2, 6) : rnd(0.3, 0.95);
+  demoTrades.push({ side: 'sell', mint: c.mint, symbol: c.symbol, amount: amount * rnd(0.5, 1), sol: 0, mult, time: Date.now() - rnd(0, 5_000), sig: addr() + addr() });
+  const s = demoTrades[demoTrades.length - 1];
+  s.sol = sol * (s.amount / amount) * mult;
+}
+export function demoWallet() {
+  const positions = buildPositions(demoTrades, new Map([...coins.values()].map(c => [c.mint, (c.market?.priceUsd ?? 0) / 160])));
+  for (const p of positions) { const c = coins.get(p.mint); p.symbol = c?.symbol; p.image = c?.image; }
+  for (const t of demoTrades) t.symbol ??= coins.get(t.mint)?.symbol;
+  return {
+    address: 'DEMO-WALLET', demo: true, solUsd: 160, error: null, checkedAt: Date.now(),
+    trades: [...demoTrades].sort((a, b) => b.time - a.time), positions,
+    totals: {
+      realized: positions.reduce((s, p) => s + p.realized, 0), unrealized: positions.reduce((s, p) => s + (p.unrealized ?? 0), 0),
+      wins: demoTrades.filter(t => t.pnl > 0).length, losses: demoTrades.filter(t => t.pnl != null && t.pnl <= 0).length,
+    },
+  };
 }

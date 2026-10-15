@@ -58,6 +58,7 @@ export function normalizePair(p) {
     pairAddress: p.pairAddress,
     url: p.url,
     priceUsd: Number(p.priceUsd) || null,
+    priceNative: Number(p.priceNative) || null,
     mcap: p.marketCap ?? p.fdv ?? null,
     liqUsd: p.liquidity?.usd ?? null,
     vol5m: p.volume?.m5 ?? 0,

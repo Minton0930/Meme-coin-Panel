@@ -57,7 +57,7 @@ export function checkCoin(coin, onlyWord) {
     };
     alerts.unshift(a);
     if (alerts.length > 200) alerts.pop();
-    coin.newsMatch = { keyword: w.kw, source: w.source, strong: a.strong };
+    coin.newsMatch = { keyword: w.kw, source: w.source, strong: a.strong, author: w.author, text: w.text?.slice(0, 140), url: w.url };
   }
 }
 

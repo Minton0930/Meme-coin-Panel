@@ -32,6 +32,7 @@ export const config = {
   xBearer: env('X_BEARER_TOKEN'),
   xAccounts: list(env('X_WATCH_ACCOUNTS', 'elonmusk,realDonaldTrump,cz_binance,MrBeast,KanyeWest')),
   newsTopics: list(env('NEWS_TOPICS', 'Elon Musk,Donald Trump')),
+  wallet: env('WALLET_ADDRESS'), // public address only, for the MY TRADES page
   disablePumpportal: env('DISABLE_PUMPPORTAL') === '1',
   disableReddit: env('DISABLE_REDDIT') === '1',
   maxCoins: 400,
@@ -46,6 +47,7 @@ export const EDITABLE = {
   X_BEARER_TOKEN: { key: 'xBearer', secret: true },
   X_WATCH_ACCOUNTS: { key: 'xAccounts', list: true },
   NEWS_TOPICS: { key: 'newsTopics', list: true },
+  WALLET_ADDRESS: { key: 'wallet' },
   APIFY_TOKEN: { key: 'apifyToken', secret: true },
 };
 

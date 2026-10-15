@@ -11,117 +11,83 @@
 </head>
 <body>
 <div class="crt"></div>
-
 <div id="boot" aria-hidden="true"><pre id="bootText"></pre></div>
 
 <header class="top">
-  <div class="logo">
-    <span class="glyph">▚</span> RUGRADAR<span class="dim">//TERMINAL</span>
-    <span id="modeTag" class="tag">CONNECTING</span>
-  </div>
-  <div id="ticker" class="ticker"><div id="tickerInner"></div></div>
+  <div class="logo"><span class="glyph">▚</span> RUGRADAR<span class="dim">//TERMINAL</span> <span id="modeTag" class="tag">CONNECTING</span></div>
+  <nav class="tabs" id="tabs">
+    <button data-v="feed" class="on">▲ POTENTIAL FEED</button>
+    <button data-v="trades">$ MY TRADES</button>
+  </nav>
   <div class="topright">
-    <span id="sources" class="sources"></span>
+    <label class="chk" title="Siren for big-account posts that match a coin, beep for new coins in the feed"><input type="checkbox" id="sound" checked> SOUND</label>
+    <button id="openChat" class="btn">ASK AI</button>
     <button id="openSettings" class="btn">⚙ SETTINGS</button>
     <span id="clock" class="clock"></span>
   </div>
 </header>
 
-<main class="grid">
-  <section class="leftcol">
-    <section class="panel radar">
-      <div class="panel-head">
-        <span class="ttl">◉ NEWS RADAR</span>
-        <span class="dim" id="radarSub"></span>
-        <form id="watchForm" class="watchform">
-          <input id="watchInput" placeholder="watch a word, e.g. elsa" autocomplete="off" maxlength="24">
-          <button class="btn">+ WATCH</button>
-        </form>
-      </div>
-      <div class="radar-body">
-        <div id="alertBox" class="alertbox"></div>
-        <div id="watchChips" class="chips"></div>
-      </div>
-    </section>
+<div id="siren" class="siren" hidden></div>
 
-    <section class="panel hotpanel">
-      <div class="panel-head"><span class="ttl">▲ TOP POTENTIAL NOW</span><span class="dim">lower risk + strongest activity right now · a filter, not a prediction</span></div>
-      <div id="hot" class="hot"></div>
-    </section>
-
-    <section class="panel feed">
-      <div class="panel-head">
-        <span class="ttl">&gt; COINS <span id="count" class="dim"></span></span>
-        <div class="presets" id="presets">
-          <button data-p="potential" class="on">HIGH POTENTIAL</button>
-          <button data-p="all">ALL</button>
-          <button data-p="new">NEW</button>
-          <button data-p="trending">TRENDING</button>
-          <button data-p="news">NEWS MATCH</button>
-        </div>
-        <div class="tools">
-          <input id="search" placeholder="search name / address" autocomplete="off">
-          <label class="chk" title="HIGH and DANGER risk coins are hidden unless this is ticked"><input type="checkbox" id="showRisky"> SHOW RISKY</label>
-          <label class="chk" title="Beep and desktop notification for news matches and new high-potential coins"><input type="checkbox" id="alerts" checked> SOUND</label>
-        </div>
-      </div>
-      <div class="tablewrap">
-        <table id="tbl">
-          <thead><tr>
-            <th data-k="symbol">COIN</th>
-            <th data-k="createdAt" class="num">AGE</th>
-            <th data-k="mcap" class="num">MCAP</th>
-            <th data-k="liq" class="num">LIQ</th>
-            <th data-k="vol5m" class="num">VOL 5M</th>
-            <th data-k="chg5m" class="num">5M</th>
-            <th data-k="holders" class="num">HOLD</th>
-            <th data-k="top10" class="num">TOP10</th>
-            <th data-k="risk">RISK</th>
-            <th data-k="mom">HYPE</th>
-            <th data-k="pot" class="num">POTENTIAL</th>
-          </tr></thead>
-          <tbody id="rows"></tbody>
-        </table>
-        <div id="emptyMsg" class="emptymsg"></div>
-      </div>
-    </section>
-  </section>
-
-  <section class="panel detail" id="detail">
-    <div class="panel-head"><span class="ttl">&gt; COIN CHECK</span></div>
-    <div id="detailBody" class="detail-body"><div class="empty">click any coin to check it_<span class="cursor">█</span></div></div>
-  </section>
-
-  <section class="panel chat">
-    <div class="panel-head"><span class="ttl">&gt; AI ANALYST</span><span id="chatState" class="dim"></span></div>
-    <div id="chatLog" class="chatlog"></div>
-    <form id="chatForm" class="chatform">
-      <span class="prompt">$</span>
-      <input id="chatInput" placeholder="ask about the coins on screen… e.g. what are the red flags on the selected coin?" autocomplete="off">
+<main id="feedView" class="view">
+  <section class="radar">
+    <span class="dot"></span>
+    <span id="radarLine" class="radarline">starting radar…</span>
+    <form id="watchForm" class="watchform">
+      <input id="watchInput" placeholder="+ extra word to watch (optional)" autocomplete="off" maxlength="24">
     </form>
   </section>
+
+  <div class="feedhead">
+    <span class="ttl">▲ HIGH POTENTIAL <span id="count" class="dim"></span></span>
+    <span class="dim">new or talked-about coins with fewer red flags and strong activity · potential, not a promise</span>
+  </div>
+  <div id="feed" class="feed"></div>
+</main>
+
+<main id="tradesView" class="view" hidden>
+  <div id="tradesBody"></div>
 </main>
 
 <div id="updateBar" class="updatebar"></div>
 
 <footer class="foot">
   <span id="cadence"></span>
-  <span class="warn">ANALYSIS ONLY · LOW RISK IS NEVER NO RISK · NOT FINANCIAL ADVICE · NEVER SHARE YOUR SEED PHRASE</span>
+  <span class="warn">ANALYSIS ONLY · NEVER TRADES · LOW RISK IS NEVER NO RISK · NEVER SHARE YOUR SEED PHRASE OR PRIVATE KEY</span>
 </footer>
 
-<dialog id="settings" class="settings">
+<dialog id="coinDlg" class="dlg wide">
+  <button class="x-close" data-close>✕</button>
+  <div id="detailBody" class="detail-body"></div>
+</dialog>
+
+<dialog id="chatDlg" class="dlg">
+  <button class="x-close" data-close>✕</button>
+  <div class="ttl">&gt; AI ANALYST <span id="chatState" class="dim"></span></div>
+  <div id="chatLog" class="chatlog"></div>
+  <form id="chatForm" class="chatform">
+    <span class="prompt">$</span>
+    <input id="chatInput" placeholder="ask about any coin… e.g. what are the red flags on the coin I opened?" autocomplete="off">
+  </form>
+</dialog>
+
+<dialog id="settings" class="dlg settings">
   <form method="dialog" id="settingsForm">
     <h2>⚙ SETTINGS</h2>
-    <p class="dim">Everything works free with no keys. These are optional. Keys are stored only on this computer, in the app's .env file. Leave a box empty to keep what is there.</p>
-    <label>Solana RPC URL <span class="dim">(FREE · a free Helius key makes rug checks much faster · helius.dev)</span>
+    <p class="dim">Everything works free with no keys. These are optional and stay only on this computer, in the app's .env file.</p>
+    <label>Your Solana wallet ADDRESS <span class="dim">(FREE · public address only, for the MY TRADES page)</span>
+      <input name="WALLET_ADDRESS" autocomplete="off" spellcheck="false" placeholder="e.g. 9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM">
+      <span class="keywarn">NEVER paste your private key or 12/24-word seed phrase here or anywhere else. This app never needs them and refuses them. Anyone asking for them is stealing.</span>
+      <span class="state err" id="walletErr"></span></label>
+    <label>Solana RPC URL <span class="dim">(FREE · a free Helius key makes checks and trade history much faster · helius.dev)</span>
       <input name="SOLANA_RPC_URL" type="password" autocomplete="off" placeholder="https://mainnet.helius-rpc.com/?api-key=..."><span class="state" data-for="SOLANA_RPC_URL"></span></label>
-    <label>People to watch in news headlines <span class="dim">(FREE · comma separated)</span>
-      <input name="NEWS_TOPICS" autocomplete="off"></label>
-    <label>Anthropic API key <span class="dim">(PAID, optional · only needed for the AI chat · console.anthropic.com)</span>
+    <label>Anthropic API key <span class="dim">(PAID, optional · only for ASK AI · console.anthropic.com)</span>
       <input name="ANTHROPIC_API_KEY" type="password" autocomplete="off"><span class="state" data-for="ANTHROPIC_API_KEY"></span></label>
     <div class="row"><button class="btn" value="cancel">CLOSE</button><button class="btn primary" id="saveSettings" value="save">SAVE</button></div>
   </form>
 </dialog>
+
+<div id="receipt" class="receiptwrap" hidden></div>
 
 <script src="/app.js" type="module"></script>
 </body>

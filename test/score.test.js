@@ -68,3 +68,10 @@ test('normalizers handle real-shaped API payloads', () => {
   assert.equal(p.buys5m, 3);
   assert.equal(p.liqUsd, 5e4);
 });
+
+test('potential is only given to checked, lower-risk coins', async () => {
+  const { potentialScore } = await import('../src/score.js');
+  assert.equal(potentialScore({ score: 60, coverage: 100 }, { score: 90 }), null);
+  assert.equal(potentialScore({ score: 20, coverage: 50 }, { score: 90 }), null);
+  assert.equal(potentialScore({ score: 20, coverage: 90 }, { score: 80 }), Math.round(80 * 0.65 + 80 * 0.35));
+});

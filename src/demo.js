@@ -23,7 +23,6 @@ function spawn(forced) {
     demo: true, name: `${sym} (demo)`, symbol: sym, creator: addr(), createdAt: created,
     sources: [graduated ? 'graduated' : 'pump-launch'],
     pump: { graduated, devBuyPct: rnd(0, shady ? 12 : 3) },
-    links: Math.random() < 0.6 ? [{ type: 'twitter', url: 'https://x.com/' }, { type: 'telegram', url: 'https://t.me/' }] : [],
     market: {
       dexId: graduated ? pick(['pumpswap', 'raydium']) : 'pumpfun', priceUsd: mcap / 1e9, mcap,
       liqUsd: graduated ? mcap * rnd(0.03, 0.2) : null, vol5m: rnd(0, mcap * 0.08), vol1h: rnd(mcap * 0.05, mcap * 0.6), vol24h: mcap * rnd(0.5, 3),
@@ -41,6 +40,9 @@ function spawn(forced) {
     },
     dev: { ageDays: devAge, txCount: Math.floor(rnd(3, 900)), complete: true, firstSeen: Date.now() - devAge * 86_400_000 },
     early: { final: true, windowSec: 60, devBuyPct: rnd(0, 8), devSoldPct: shady && Math.random() < 0.2 ? 8 : 0, devSoldAll: false, snipeBuys: Math.floor(rnd(0, shady ? 25 : 4)), snipePct: shady ? rnd(2, 30) : rnd(0, 3), uniqueBuyers: Math.floor(rnd(5, 120)), buys: 100, sells: 30 },
+    jup: { holders: Math.floor(rnd(30, 5000)), organicScore: shady ? rnd(0, 25) : rnd(20, 90), netBuyers5m: Math.floor(rnd(shady ? -20 : -5, 40)), holderChange1h: Math.floor(rnd(-10, 120)), checkedAt: Date.now() },
+    info: { twitter: Math.random() < 0.7 ? `https://x.com/${sym.toLowerCase()}_demo` : null, website: Math.random() < 0.4 ? 'https://example.com' : null, telegram: Math.random() < 0.4 ? 'https://t.me/' : null, description: `${sym} demo coin. Fake text for trying the dashboard.`, replies: Math.floor(rnd(0, 300)), kingOfHill: Math.random() < 0.1, checkedAt: Date.now() },
+    gtRank: graduated && Math.random() < 0.2 ? Math.floor(rnd(1, 20)) : undefined,
     trend: { coingeckoTrending: Math.random() < 0.05, reddit: { posts1h: Math.floor(rnd(0, 6)), posts24h: Math.floor(rnd(0, 40)), top: [] }, tiktok: null, tiktokEnabled: false, checkedAt: Date.now() },
   });
 }

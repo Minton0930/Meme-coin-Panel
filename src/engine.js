@@ -8,6 +8,7 @@ import { rugReport } from './sources/rugcheck.js';
 import { mintInfo, topHolders, walletAge } from './sources/solana.js';
 import { refreshCoinGecko, trendFor } from './sources/trends.js';
 import { startNewsRadar, checkCoin, setWordHook } from './sources/news.js';
+import { jupiterInfo, pumpInfo, geckoTrending } from './sources/extra.js';
 
 export const coins = new Map();
 // A new watch word also checks coins launched in the last 30 minutes.
@@ -136,6 +137,38 @@ async function discoverTick() {
   for (const t of found) upsert(t.mint, { image: t.icon, links: t.links, boosts: t.boosts, sources: t.sources, description: t.description });
 }
 
+// Jupiter: 50 coins per call, most interesting first, each refreshed every ~45s.
+async function jupTick() {
+  const due = [...coins.values()].filter(c => !c.jup || Date.now() - c.jup.checkedAt > 45_000)
+    .sort((a, b) => interest(b) - interest(a)).slice(0, 50);
+  const info = await jupiterInfo(due.map(c => c.mint));
+  for (const [mint, j] of info) {
+    const c = coins.get(mint);
+    if (!c) continue;
+    c.jup = j;
+    c.image ??= j.icon;
+    rescore(c);
+  }
+  for (const c of due) if (!info.has(c.mint)) c.jup = { checkedAt: Date.now(), missing: true };
+}
+
+// pump.fun coin page data (image, socials, comments) for pump coins, one at a time.
+async function pumpInfoTick() {
+  const next = [...coins.values()].filter(c => /pump$/.test(c.mint) && (!c.info || Date.now() - c.info.checkedAt > 5 * 60_000))
+    .sort((a, b) => interest(b) - interest(a))[0];
+  if (!next) return;
+  try { next.info = await pumpInfo(next.mint); next.image ??= next.info.image; }
+  catch { next.info = { checkedAt: Date.now(), failed: true }; }
+  rescore(next);
+}
+
+async function gtTick() {
+  const list = await geckoTrending();
+  const ranks = new Map(list.map(x => [x.mint, x.rank]));
+  for (const c of coins.values()) if (c.gtRank && !ranks.has(c.mint)) { c.gtRank = null; rescore(c); }
+  for (const x of list) upsert(x.mint, { gtRank: x.rank, sources: ['gt-trending'] });
+}
+
 async function trendTick() {
   const top = [...coins.values()].filter(c => c.symbol).sort((a, b) => (b.momentum?.score ?? 0) - (a.momentum?.score ?? 0)).slice(0, 6);
   for (const c of top) {
@@ -164,7 +197,8 @@ export const cadence = {
   discovery: '~7s (DexScreener profiles and boosts)',
   rugChecks: 'each new coin queued; RugCheck ~1 per 1.5s, re-checked every ~2 min',
   trends: 'top 6 coins every 60s, cached 10 min (Reddit) / 30 min (TikTok)',
-  news: 'your watch words: instant · X posts: every 15s (needs X key) · news headlines: every 2 min',
+  news: 'your watch words: instant · news headlines: every 2 min',
+  extra: 'Jupiter 50 coins / ~2s · pump.fun info ~3 coins/s · GeckoTerminal trending every 60s',
 };
 
 export function start() {
@@ -184,5 +218,8 @@ export function start() {
   every(1_000, marketTick, 'market');
   every(60_000, () => refreshCoinGecko(), 'coingecko');
   every(60_000, trendTick, 'trends');
+  every(2_000, jupTick, 'jupiter');
+  every(400, pumpInfoTick, 'pumpinfo');
+  every(60_000, gtTick, 'geckoterminal');
   enrichLoop();
 }

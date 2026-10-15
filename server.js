@@ -4,6 +4,7 @@ import { join, extname, normalize } from 'node:path';
 import { config, ROOT, isPublicRpc, publicSettings, saveSettings } from './src/config.js';
 import { alerts, watchWords, addManual, removeWord } from './src/sources/news.js';
 import { coins, start, pin, cadence } from './src/engine.js';
+import { potentialScore } from './src/score.js';
 import { startDemo } from './src/demo.js';
 import { handleChat } from './src/chat.js';
 import { statusSnapshot } from './src/http.js';
@@ -12,21 +13,42 @@ import { updateState, startUpdateCheck } from './src/update.js';
 const PUBLIC = join(ROOT, 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 
+const httpUrl = u => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
+const xUrl = u => !u ? null : httpUrl(u) ?? (/^@?\w{1,15}$/.test(u) ? `https://x.com/${u.replace('@', '')}` : null);
+const tgUrl = u => !u ? null : httpUrl(u) ?? (/^@?\w{3,32}$/.test(u) ? `https://t.me/${u.replace('@', '')}` : null);
+
+// Best-known X / Telegram / website for a coin, from pump.fun, Jupiter and DexScreener.
+export function socials(c) {
+  const all = [...(c.links ?? []), ...(c.market?.socials ?? [])];
+  const find = re => all.find(l => re.test(l.type ?? '') || re.test(l.url ?? ''))?.url;
+  return {
+    twitter: xUrl(c.info?.twitter) ?? xUrl(c.jup?.twitter) ?? httpUrl(find(/twitter|x\.com/i)),
+    telegram: tgUrl(c.info?.telegram) ?? tgUrl(c.jup?.telegram) ?? httpUrl(find(/telegram|t\.me/i)),
+    website: httpUrl(c.info?.website) ?? httpUrl(c.jup?.website) ?? httpUrl(all.find(l => /website/i.test(l.type ?? ''))?.url),
+  };
+}
+
 function summary(c) {
   const m = c.market ?? {};
   const holders = c.rug?.holders?.length ? c.rug.holders : c.chain?.holders;
   return {
-    mint: c.mint, symbol: c.symbol, name: c.name, image: c.image ?? m.image, demo: c.demo,
+    mint: c.mint, symbol: c.symbol, name: c.name, image: c.image ?? m.image ?? c.info?.image ?? c.jup?.icon, demo: c.demo,
     createdAt: c.createdAt ?? m.pairCreatedAt ?? c.firstSeen,
     stage: c.pump && !c.pump.graduated ? 'curve' : m.dexId ?? (c.pump ? 'curve' : '?'),
-    mcap: m.mcap, liq: m.liqUsd, vol5m: m.vol5m, vol1h: m.vol1h, chg5m: m.change5m, chg1h: m.change1h,
+    mcap: m.mcap ?? c.info?.usdMcap, liq: m.liqUsd, vol5m: m.vol5m, vol1h: m.vol1h, chg5m: m.change5m, chg1h: m.change1h,
     buys5m: m.buys5m, sells5m: m.sells5m,
-    holders: c.rug?.totalHolders,
-    top10: holders ? holders.slice(0, 10).reduce((s, h) => s + h.pct, 0) : null,
+    holders: c.rug?.totalHolders ?? c.jup?.holders,
+    top10: holders ? holders.slice(0, 10).reduce((s, h) => s + h.pct, 0) : c.jup?.topHoldersPct ?? null,
     risk: c.risk?.score, grade: c.risk?.grade, coverage: c.risk?.coverage,
     flag: c.risk?.factors.find(f => f.status === 'bad')?.label,
     mom: c.momentum?.score,
-    social: !!(c.trend?.coingeckoTrending || c.trend?.reddit?.posts1h > 2 || c.trend?.tiktok?.views72h > 50_000),
+    pot: potentialScore(c.risk, c.momentum),
+    why: c.momentum?.reasons?.slice(0, 2),
+    organic: c.jup?.organicScore != null ? Math.round(c.jup.organicScore) : null,
+    gtRank: c.gtRank ?? null,
+    replies: c.info?.replies ?? null,
+    social: !!(c.trend?.coingeckoTrending || c.trend?.reddit?.posts1h > 2 || c.gtRank),
+    links: socials(c),
     sources: c.sources,
     news: c.newsMatch,
   };
@@ -36,7 +58,7 @@ function sse(req, res) {
   res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
   const push = () => {
     const payload = {
-      t: Date.now(), demo: config.demo, cadence, publicRpc: isPublicRpc(),
+      t: Date.now(), demo: config.demo, cadence, publicRpc: isPublicRpc(), newsTopics: config.newsTopics,
       chat: !!config.anthropicKey, tiktok: !!config.apifyToken, x: !!config.xBearer, xAccounts: config.xAccounts,
       update: updateState,
       alerts: alerts.slice(0, 30),
@@ -81,7 +103,7 @@ const server = createServer(async (req, res) => {
       if (!c) { res.writeHead(404); return res.end('{}'); }
       if (!config.demo) pin(c.mint);
       res.writeHead(200, { 'content-type': 'application/json' });
-      return res.end(JSON.stringify(c));
+      return res.end(JSON.stringify({ ...c, socials: socials(c), pot: potentialScore(c.risk, c.momentum) }));
     }
     // Static files
     const rel = normalize(url.pathname === '/' ? '/index.html' : url.pathname).replace(/^(\.\.[/\\])+/, '');

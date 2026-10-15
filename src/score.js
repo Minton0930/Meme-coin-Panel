@@ -10,24 +10,31 @@ function factor(key, label, max, status, points, detail) {
 
 export function riskScore(c) {
   const f = [];
-  const m = c.market, rug = c.rug, ch = c.chain, early = c.early, dev = c.dev;
+  const m = c.market, rug = c.rug, ch = c.chain, early = c.early, dev = c.dev, jup = c.jup?.missing ? null : c.jup;
+  const jupFlag = v => (v === true ? null : v === false ? 'active' : undefined);
   const onCurve = !m || /pump/i.test(m.dexId ?? '') && !c.pump?.graduated && !m.liqUsd;
 
   // 1. Mint authority: if live, supply can be printed at any time.
-  const mintAuth = ch?.mintAuthority !== undefined ? ch.mintAuthority : rug?.authoritiesKnown ? rug.mintAuthority : undefined;
+  let mintAuth = ch?.mintAuthority !== undefined ? ch.mintAuthority : rug?.authoritiesKnown ? rug.mintAuthority : undefined;
+  if (mintAuth === undefined && jup) mintAuth = jupFlag(jup.mintDisabled);
   if (mintAuth === undefined) f.push(factor('mint', 'Mint authority', 25, 'unknown', 10, 'Not checked yet'));
-  else if (mintAuth) f.push(factor('mint', 'Mint authority', 25, 'bad', 25, `ACTIVE (${short(mintAuth)}): dev can mint more supply`));
+  else if (mintAuth) f.push(factor('mint', 'Mint authority', 25, 'bad', 25, `ACTIVE${mintAuth === 'active' ? '' : ` (${short(mintAuth)})`}: dev can mint more supply`));
   else f.push(factor('mint', 'Mint authority', 25, 'ok', 0, 'Revoked'));
 
   // 2. Freeze authority: if live, holders can be frozen so they cannot sell.
-  const frz = ch?.freezeAuthority !== undefined ? ch.freezeAuthority : rug?.authoritiesKnown ? rug.freezeAuthority : undefined;
+  let frz = ch?.freezeAuthority !== undefined ? ch.freezeAuthority : rug?.authoritiesKnown ? rug.freezeAuthority : undefined;
+  if (frz === undefined && jup) frz = jupFlag(jup.freezeDisabled);
   if (frz === undefined) f.push(factor('freeze', 'Freeze authority', 25, 'unknown', 10, 'Not checked yet'));
-  else if (frz) f.push(factor('freeze', 'Freeze authority', 25, 'bad', 25, `ACTIVE (${short(frz)}): wallets can be frozen (honeypot risk)`));
+  else if (frz) f.push(factor('freeze', 'Freeze authority', 25, 'bad', 25, `ACTIVE${frz === 'active' ? '' : ` (${short(frz)})`}: wallets can be frozen (honeypot risk)`));
   else f.push(factor('freeze', 'Freeze authority', 25, 'ok', 0, 'Revoked'));
 
   // 3. Holder concentration (pool / bonding-curve accounts excluded).
   const holders = rug?.holders?.length ? rug.holders : ch?.holders ?? null;
-  if (!holders) f.push(factor('top10', 'Top 10 holders', 20, 'unknown', 8, 'Not checked yet'));
+  if (!holders && jup?.topHoldersPct != null) {
+    const top10 = jup.topHoldersPct;
+    const p = top10 > 50 ? 20 : top10 > 35 ? 14 : top10 > 25 ? 8 : top10 > 15 ? 3 : 0;
+    f.push(factor('top10', 'Top 10 holders', 20, p >= 14 ? 'bad' : p > 0 ? 'warn' : 'ok', p, `${fmtPct(top10)} of supply (Jupiter)`));
+  } else if (!holders) f.push(factor('top10', 'Top 10 holders', 20, 'unknown', 8, 'Not checked yet'));
   else {
     const top10 = holders.slice(0, 10).reduce((s, h) => s + h.pct, 0);
     const top1 = holders[0]?.pct ?? 0;
@@ -68,11 +75,12 @@ export function riskScore(c) {
     f.push(factor('devage', 'Dev wallet age', 10, p >= 6 ? 'bad' : p ? 'warn' : 'ok', p,
       `${dev.complete ? '' : '>'}${d < 1 ? `${(d * 24).toFixed(1)}h` : `${d.toFixed(0)}d`} old, ${dev.complete ? '' : '3000+ '}${dev.complete ? `${dev.txCount} txs` : 'txs (very active)'}`));
   }
-  if (rug?.creatorTokenCount != null && rug.creatorTokenCount > 1) {
-    const n = rug.creatorTokenCount;
+  const serialN = rug?.creatorTokenCount ?? jup?.devMints ?? null;
+  if (serialN != null && serialN > 1) {
+    const n = serialN;
     f.push(factor('serial', 'Dev launched other tokens', 10, n >= 5 ? 'bad' : 'warn', n >= 10 ? 10 : n >= 5 ? 7 : 3, `${n} tokens from this creator (serial launcher)`));
   }
-  const devHold = rug?.creatorBalancePct ?? (early ? Math.max(0, early.devBuyPct - early.devSoldPct) : null);
+  const devHold = rug?.creatorBalancePct ?? jup?.devBalancePct ?? (early ? Math.max(0, early.devBuyPct - early.devSoldPct) : null);
   if (devHold != null) {
     const p = devHold > 10 ? 10 : devHold > 5 ? 5 : 0;
     f.push(factor('devhold', 'Dev holding', 10, p >= 10 ? 'bad' : p ? 'warn' : 'ok', p, fmtPct(devHold)));
@@ -93,7 +101,7 @@ export function riskScore(c) {
     if (ratio > 2) f.push(factor('dump', 'Sell pressure (5m)', 6, 'warn', 6, `${m.sells5m} sells vs ${m.buys5m} buys`));
   }
   if (m && m.change1h < -60) f.push(factor('crash', 'Price crash (1h)', 8, 'bad', 8, `${m.change1h.toFixed(0)}% in 1h`));
-  const hc = rug?.totalHolders;
+  const hc = rug?.totalHolders ?? jup?.holders;
   if (hc != null && hc < 50) f.push(factor('holders', 'Holder count', 5, 'warn', 5, `${hc} holders`));
 
   // 8. RugCheck's own danger-level findings that we did not already cover.
@@ -136,9 +144,16 @@ export function momentumScore(c) {
   }
   if (c.early && c.early.uniqueBuyers > 40) { s += 8; reasons.push(`${c.early.uniqueBuyers} unique buyers in first minute`); }
   if (t?.coingeckoTrending) { s += 10; reasons.push('On CoinGecko trending'); }
+  const j = c.jup?.missing ? null : c.jup;
+  if (j?.organicScore > 30) { s += Math.min(15, j.organicScore / 6); reasons.push(`Jupiter organic activity ${Math.round(j.organicScore)}/100`); }
+  if (j?.netBuyers5m > 10) { s += Math.min(8, j.netBuyers5m / 5); reasons.push(`${j.netBuyers5m} more buyers than sellers in 5m`); }
+  if (j?.holderChange1h > 50) { s += Math.min(8, j.holderChange1h / 25); reasons.push(`+${j.holderChange1h} holders in 1h`); }
+  if (c.gtRank) { s += Math.max(3, 14 - c.gtRank / 2); reasons.push(`#${c.gtRank} trending on GeckoTerminal`); }
+  if (c.info?.kingOfHill) { s += 5; reasons.push('Was king of the hill on pump.fun'); }
+  if (c.info?.replies > 50) { s += Math.min(6, c.info.replies / 50); reasons.push(`${c.info.replies} comments on pump.fun`); }
   if (t?.reddit?.posts1h > 2) { s += Math.min(10, t.reddit.posts1h * 2); reasons.push(`${t.reddit.posts1h} Reddit posts in the last hour`); }
   if (t?.tiktok?.views72h > 50_000) { s += Math.min(15, t.tiktok.views72h / 100_000); reasons.push(`${fmtNum(t.tiktok.views72h)} TikTok views (72h)`); }
-  if ((c.links?.length ?? 0) + (m?.socials?.length ?? 0) === 0) reasons.push('No socials or website listed');
+  if ((c.links?.length ?? 0) + (m?.socials?.length ?? 0) === 0 && !c.info?.twitter && !c.jup?.twitter && !c.info?.website) reasons.push('No socials or website listed');
   return { score: Math.round(Math.min(100, s)), reasons };
 }
 
@@ -147,4 +162,11 @@ export function fmtNum(n) {
   if (n == null) return '?';
   const a = Math.abs(n);
   return a >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : a >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : a >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : n.toFixed(0);
+}
+
+// "High potential" filter: only coins with fewer red flags (LOW or MEDIUM risk,
+// mostly checked), ranked by activity and safety together. A filter, not a forecast.
+export function potentialScore(risk, mom) {
+  if (!risk || risk.score >= 50 || risk.coverage < 80) return null;
+  return Math.round((mom?.score ?? 0) * 0.65 + (100 - risk.score) * 0.35);
 }

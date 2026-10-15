@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RUGRADAR // terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 fill=%22%23050806%22/%3E%3Ccircle cx=%228%22 cy=%228%22 r=%225%22 fill=%22none%22 stroke=%22%2339ff88%22 stroke-width=%222%22/%3E%3C/svg%3E">
+</head>
+<body>
+<div class="scene" aria-hidden="true"></div>
+
+<div id="boot" aria-hidden="true"><pre id="bootText"></pre></div>
+
+<header class="top">
+  <div class="logo">
+    <span class="glyph">◆</span> RugRadar<span class="dim">MEMECOIN RADAR</span>
+    <span id="modeTag" class="tag">CONNECTING</span>
+  </div>
+  <div id="clock" class="clock"></div>
+  <div class="topright">
+    <span id="sources" class="sources"></span>
+    <button id="openSettings" class="btn">⚙ Settings</button>
+  </div>
+  <div id="ticker" class="ticker"><div id="tickerInner"></div></div>
+</header>
+
+<main class="grid">
+  <section class="leftcol">
+    <section class="panel radar">
+      <div class="panel-head">
+        <span class="ttl">News radar</span>
+        <span class="dim" id="radarSub"></span>
+        <form id="watchForm" class="watchform">
+          <input id="watchInput" placeholder="watch a word, e.g. elsa" autocomplete="off" maxlength="24">
+          <button class="btn">+ WATCH</button>
+        </form>
+      </div>
+      <div class="radar-body">
+        <div id="alertBox" class="alertbox"></div>
+        <div id="watchChips" class="chips"></div>
+      </div>
+    </section>
+
+    <section class="panel hotpanel">
+      <div class="panel-head"><span class="ttl">Hot right now</span><span class="dim">most activity and hype this minute. not a prediction</span></div>
+      <div id="hot" class="hot"></div>
+    </section>
+
+    <section class="panel feed">
+      <div class="panel-head">
+        <span class="ttl">All coins <span id="count" class="dim"></span></span>
+        <div class="presets" id="presets">
+          <button data-p="all" class="on">ALL</button>
+          <button data-p="new">NEW</button>
+          <button data-p="news">NEWS MATCH</button>
+          <button data-p="clean">LOW RISK + HOT</button>
+          <button data-p="danger">DANGER</button>
+        </div>
+        <div class="tools">
+          <input id="search" placeholder="search name / address" autocomplete="off">
+          <label class="chk" title="Beep and desktop notification for news matches and LOW RISK + HOT coins"><input type="checkbox" id="alerts" checked> SOUND</label>
+        </div>
+      </div>
+      <div class="tablewrap">
+        <table id="tbl">
+          <thead><tr>
+            <th data-k="symbol">COIN</th>
+            <th data-k="createdAt" class="num">AGE</th>
+            <th data-k="mcap" class="num">MCAP</th>
+            <th data-k="vol5m" class="num">VOL 5M</th>
+            <th data-k="chg5m" class="num">5M</th>
+            <th data-k="risk">RISK</th>
+            <th data-k="mom">HYPE</th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+
+  <section class="panel detail" id="detail">
+    <div class="panel-head"><span class="ttl">Coin check</span></div>
+    <div id="detailBody" class="detail-body"><div class="empty">Click any coin to check it</div></div>
+  </section>
+
+  <section class="panel chat">
+    <div class="panel-head"><span class="ttl">AI analyst</span><span id="chatState" class="dim"></span></div>
+    <div id="chatLog" class="chatlog"></div>
+    <form id="chatForm" class="chatform">
+      <span class="prompt">›</span>
+      <input id="chatInput" placeholder="ask anything about these coins… e.g. is the selected coin a rug?" autocomplete="off">
+    </form>
+  </section>
+</main>
+
+<div id="updateBar" class="updatebar"></div>
+
+<footer class="foot">
+  <span id="cadence"></span>
+  <span class="warn">ANALYSIS ONLY · LOW RISK IS NEVER NO RISK · NOT FINANCIAL ADVICE · NEVER SHARE YOUR SEED PHRASE</span>
+</footer>
+
+<dialog id="settings" class="settings">
+  <form method="dialog" id="settingsForm">
+    <h2>Settings</h2>
+    <p class="dim">Paste a key and press SAVE. It is stored only on this computer, in the app's .env file. Leave a box empty to keep what is there.</p>
+    <label>Anthropic API key <span class="dim">(turns on the AI chat · console.anthropic.com)</span>
+      <input name="ANTHROPIC_API_KEY" type="password" autocomplete="off"><span class="state" data-for="ANTHROPIC_API_KEY"></span></label>
+    <label>Solana RPC URL <span class="dim">(free Helius key makes checks much faster · helius.dev)</span>
+      <input name="SOLANA_RPC_URL" type="password" autocomplete="off" placeholder="https://mainnet.helius-rpc.com/?api-key=..."><span class="state" data-for="SOLANA_RPC_URL"></span></label>
+    <label>X (Twitter) bearer token <span class="dim">(paid X API plan · developer.x.com · needed for instant posts)</span>
+      <input name="X_BEARER_TOKEN" type="password" autocomplete="off"><span class="state" data-for="X_BEARER_TOKEN"></span></label>
+    <label>X accounts to watch <span class="dim">(comma separated)</span>
+      <input name="X_WATCH_ACCOUNTS" autocomplete="off"></label>
+    <label>People to watch in news headlines <span class="dim">(free, comma separated)</span>
+      <input name="NEWS_TOPICS" autocomplete="off"></label>
+    <label>Apify token <span class="dim">(optional, paid · TikTok search)</span>
+      <input name="APIFY_TOKEN" type="password" autocomplete="off"><span class="state" data-for="APIFY_TOKEN"></span></label>
+    <div class="row"><button class="btn" value="cancel">CLOSE</button><button class="btn primary" id="saveSettings" value="save">SAVE</button></div>
+  </form>
+</dialog>
+
+<script src="/app.js" type="module"></script>
+</body>
+</html>

@@ -115,6 +115,43 @@ export function riskScore(c) {
   }
   if (jup?.isSus) f.push(factor('rcdanger', 'Jupiter marks it suspicious', 15, 'bad', 15, 'Jupiter audit flag: suspicious token'));
 
+  // Top-10 cluster: one person behind many wallets.
+  const cl = c.cluster;
+  const hasHolders = !!(rug?.holders?.length || ch?.holders?.length);
+  if (cl && !cl.failed) {
+    const parts = [], warns = [];
+    if (cl.sameFunder.n >= 3) parts.push(`${cl.sameFunder.n} top wallets got their first SOL from the same wallet (${fmtPct(cl.sameFunder.pct)} of supply)`);
+    else if (cl.sameFunder.n === 2 && cl.sameFunder.pct >= 3) warns.push(`2 top wallets share a funder (${fmtPct(cl.sameFunder.pct)})`);
+    if (cl.sameAge.n >= 4) parts.push(`${cl.sameAge.n} top wallets were created within 2 hours of each other`);
+    else if (cl.sameAge.n === 3) warns.push('3 top wallets created within 2 hours of each other');
+    if (cl.sameBal.n >= 3 && cl.sameBal.pct >= 3) parts.push(`${cl.sameBal.n} top wallets hold almost the same amount (${fmtPct(cl.sameBal.pct)} together)`);
+    if (cl.fresh >= 5) parts.push(`${cl.fresh} of the top ${cl.checked} wallets are brand new throwaways`);
+    else if (cl.fresh >= 3) warns.push(`${cl.fresh} top wallets are brand new`);
+    if (parts.length) f.push(factor('cluster', 'Top holders look like one person', 30, 'bad', 30, parts.join('; ')));
+    else if (warns.length) f.push(factor('cluster', 'Top holders partly linked', 30, 'warn', 8, warns.join('; ')));
+    else f.push(factor('cluster', 'Top holders look independent', 30, 'ok', 0, `${cl.checked} wallets checked: different ages, balances and funders`));
+  } else if (hasHolders) f.push(factor('cluster', 'Top-holder cluster check', 30, 'unknown', 6, cl?.failed ? 'Check failed, retrying' : 'Not checked yet'));
+
+  // Community links: a real project has an X account or Telegram.
+  const all = [...(c.links ?? []), ...(m?.socials ?? [])];
+  const hasX = !!(c.info?.twitter || jup?.twitter || all.some(l => /twitter|x\.com/i.test(`${l.type} ${l.url}`)));
+  const hasTg = !!(c.info?.telegram || jup?.telegram || all.some(l => /telegram|t\.me/i.test(`${l.type} ${l.url}`)));
+  const hasWeb = !!(c.info?.website || jup?.website || all.some(l => /website/i.test(l.type ?? '')));
+  if (c.info || jup || m) {
+    if (!hasX && !hasTg) f.push(factor('community', 'No community links', 15, 'bad', 15, hasWeb ? 'Website only, no X or Telegram' : 'No X, Telegram or website'));
+    else f.push(factor('community', 'Community links', 15, 'ok', 0, [hasX && 'X', hasTg && 'Telegram', hasWeb && 'website'].filter(Boolean).join(', ')));
+  }
+
+  // Dev track record from the dev's earlier coins (RugCheck).
+  const past = rug?.creatorPast;
+  if (past && past.length >= 2) {
+    const dead = past.filter(t => t.mcap < 10_000).length;
+    const best = Math.max(...past.map(t => t.mcap));
+    if (dead === past.length) f.push(factor('devpast', 'Dev track record', 20, 'bad', 20, `All ${past.length} of the dev's earlier coins are dead (under $10k)`));
+    else if (dead / past.length >= 0.8) f.push(factor('devpast', 'Dev track record', 20, 'warn', 8, `${dead} of ${past.length} earlier coins are dead; best is $${fmtNum(best)}`));
+    else f.push(factor('devpast', 'Dev track record', 20, 'ok', 0, `Best earlier coin $${fmtNum(best)} (${past.length} earlier coins)`));
+  }
+
   // Live watchdog findings (engine.js re-checks coins on screen every ~20s).
   const w = c.watch;
   if (w?.devSold) f.push(factor('devsold', 'Dev dumped', 30, 'bad', 30, `Dev held ${fmtPct(w.devPeak)}, now ${fmtPct(w.devNow)}`));
@@ -203,7 +240,7 @@ export function potentialScore(risk, mom) {
   if (!risk || risk.score >= 50 || risk.coverage < 80) return null;
   const fs = risk.factors ?? [];
   if (fs.some(x => x.status === 'bad')) return null;
-  if (fs.some(x => x.key === 'bundle' && x.status === 'unknown')) return null;
+  if (fs.some(x => (x.key === 'bundle' || x.key === 'cluster') && x.status === 'unknown')) return null;
   return Math.round((mom?.score ?? 0) * 0.65 + (100 - risk.score) * 0.35);
 }
 

@@ -34,6 +34,8 @@ export function normalizeRug(r) {
     creator: r.creator ?? null,
     creatorBalancePct: r.creatorBalance && r.token?.supply ? (r.creatorBalance / r.token.supply) * 100 : null,
     creatorTokenCount: Array.isArray(r.creatorTokens) ? r.creatorTokens.length : null,
+    // The dev's earlier coins and their market cap now: a trail of dead coins is a serial rugger.
+    creatorPast: Array.isArray(r.creatorTokens) ? r.creatorTokens.filter(t => t.mint !== r.mint).map(t => ({ mint: t.mint, mcap: Number(t.marketCap ?? t.market_cap ?? 0) || 0, at: t.createdAt ? Date.parse(t.createdAt) : null })) : null,
     insidersDetected: r.graphInsidersDetected ?? null,
     rugged: !!r.rugged,
     risks: (r.risks ?? []).map(x => ({ name: x.name, level: x.level, description: x.description, value: x.value })),

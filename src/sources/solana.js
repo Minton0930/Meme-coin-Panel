@@ -137,3 +137,56 @@ export async function walletTokenBalance(owner, mint) {
   const r = await rpc('getTokenAccountsByOwner', [owner, { mint }, { encoding: 'jsonParsed' }]);
   return (r?.value ?? []).reduce((s, a) => s + Number(a.account?.data?.parsed?.info?.tokenAmount?.uiAmount ?? 0), 0);
 }
+
+// Top-10 cluster check. One person running many wallets usually shows up as:
+// wallets created within the same hour or two, holding near-identical amounts,
+// or funded with their first SOL by the same wallet. Costs ~2 RPC calls per wallet.
+export async function holderCluster(holders) {
+  const top = holders.filter(h => h.pct >= 0.3).slice(0, 10);
+  const info = [];
+  for (const h of top) {
+    const sigs = await rpc('getSignaturesForAddress', [h.address, { limit: 1000 }]);
+    if (!sigs?.length) continue;
+    const old = sigs.length >= 1000; // busy wallet: older than this page, not a throwaway
+    const first = sigs[sigs.length - 1];
+    let funder = null;
+    if (!old) {
+      try {
+        const tx = await rpc('getTransaction', [first.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 }]);
+        const keys = tx?.transaction?.message?.accountKeys?.map(k => k.pubkey ?? k) ?? [];
+        // Whoever paid for the wallet's first transaction (or sent it SOL) funded it.
+        funder = keys[0] !== h.address ? keys[0] : (tx?.meta?.preBalances ?? []).map((b, i) => [keys[i], b - (tx.meta.postBalances[i] ?? 0)]).filter(([k, d]) => k !== h.address && d > 0).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+      } catch {}
+    }
+    info.push({ address: h.address, pct: h.pct, born: old ? null : (first.blockTime ?? 0) * 1000, txs: sigs.length, funder });
+  }
+  return analyzeCluster(info);
+}
+
+export function analyzeCluster(info) {
+  const young = info.filter(w => w.born);
+  // Largest group of wallets created within 2 hours of each other.
+  let sameAge = [];
+  for (const w of young) {
+    const g = young.filter(x => Math.abs(x.born - w.born) <= 2 * 3600_000);
+    if (g.length > sameAge.length) sameAge = g;
+  }
+  // Largest group holding amounts within 3% of each other (e.g. 2.01%, 2.03%, 1.99%).
+  let sameBal = [];
+  for (const w of info) {
+    const g = info.filter(x => Math.abs(x.pct - w.pct) <= w.pct * 0.03);
+    if (g.length > sameBal.length) sameBal = g;
+  }
+  const byFunder = new Map();
+  for (const w of info) if (w.funder) byFunder.set(w.funder, [...(byFunder.get(w.funder) ?? []), w]);
+  const sameFunder = [...byFunder.values()].sort((a, b) => b.length - a.length)[0] ?? [];
+  const sum = g => g.reduce((s, w) => s + w.pct, 0);
+  return {
+    checked: info.length,
+    sameAge: { n: sameAge.length, pct: sum(sameAge) },
+    sameBal: { n: sameBal.length, pct: sum(sameBal) },
+    sameFunder: { n: sameFunder.length, pct: sum(sameFunder), funder: sameFunder[0]?.funder ?? null },
+    fresh: young.filter(w => Date.now() - w.born < 24 * 3600_000 && w.txs < 15).length,
+    checkedAt: Date.now(),
+  };
+}

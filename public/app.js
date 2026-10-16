@@ -178,7 +178,8 @@ function checkAlerts() {
   for (const a of state.alerts) {
     if (alerted.has('n' + a.id)) continue;
     alerted.add('n' + a.id);
-    if (!firstFrame && Date.now() - a.at < 60_000 && a.strong) hit ??= a;
+    // Siren only for big known accounts (10k+ followers) and your own words, not plain headlines.
+    if (!firstFrame && Date.now() - a.at < 60_000 && a.strong && (a.source === 'social' || a.source === 'x' || a.source === 'manual')) hit ??= a;
   }
   for (const c of state.coins) if ((c.feed || (showFresh && c.fresh != null)) && !alerted.has('f' + c.mint)) { alerted.add('f' + c.mint); if (!firstFrame) newFeed++; }
   // A coin we showed just tripped the rug watchdog (dev sold, top wallets dumping).
@@ -201,7 +202,7 @@ function showSiren(a) {
   const c = state.coins.find(x => x.mint === a.mint);
   const el = $('#siren');
   el.hidden = false;
-  el.innerHTML = `<div><div class="sbig">🚨 ${esc(a.author ?? 'NEWS')} POSTED "${esc(a.keyword)}" → <b>$${esc(a.symbol)}</b> ${a.secsAfterPost >= 0 ? `launched ${a.secsAfterPost}s later` : 'launched BEFORE the post (be careful)'}</div>
+  el.innerHTML = `<div><div class="sbig">🚨 ${esc(a.author ?? 'NEWS')}${a.followers ? ` (${num(a.followers)} followers)` : ''} POSTED "${esc(a.keyword)}" → <b>$${esc(a.symbol)}</b> ${a.secsAfterPost >= 0 ? `launched ${a.secsAfterPost}s later` : 'launched BEFORE the post (be careful)'}</div>
     <div class="sub">${esc((a.postText ?? '').slice(0, 160))} · ${c ? `rug risk ${RISK_WORD[c.grade] ?? 'checking'} ${c.risk ?? ''}` : 'rug check running'} · copycats launch fast, check before anything</div></div>
     <button class="btn closeS">CLOSE</button>`;
   el.onclick = e => { if (e.target.closest('.closeS')) { el.hidden = true; stopSiren(); } else { select(a.mint); } };
@@ -260,6 +261,10 @@ const PLAIN = {
   snipers: f => f.status === 'ok' ? 'Few bots at launch' : `Bots bought ${f.detail.match(/[\d.]+%/)?.[0] ?? 'a lot'} in the first seconds`,
   rcinsider: () => 'RugCheck found a network of insider wallets',
   token2022: f => `Token trick: ${f.detail}`,
+  cluster: f => f.status === 'ok' ? 'Top 10 wallets look like different people' : f.status === 'unknown' ? 'Top-10 wallet cluster check not done yet' : `Top wallets look linked: ${f.detail}`,
+  community: f => f.status === 'ok' ? `Has community links (${f.detail})` : `No community: ${f.detail}`,
+  devpast: f => f.status === 'ok' ? `Dev track record OK: ${f.detail}` : `Dev track record: ${f.detail}`,
+  dumpers: f => f.detail,
   washvol: f => `Fake-looking volume: ${f.detail}`,
   dump: () => 'Many more sellers than buyers right now',
   crash: f => `Price crashed ${f.detail}`,

@@ -56,7 +56,7 @@ export function checkCoin(coin, onlyWord) {
     const a = {
       id: `${coin.mint}:${w.kw}`, at: Date.now(), mint: coin.mint, symbol: coin.symbol, name: coin.name,
       keyword: w.kw, match: how, strong: w.strong || how === 'exact', source: w.source,
-      postText: w.text?.slice(0, 280), postUrl: w.url, author: w.author,
+      postText: w.text?.slice(0, 280), postUrl: w.url, author: w.author, followers: w.followers ?? null,
       secsAfterPost: Math.round((created - w.at) / 1000),
     };
     alerts.unshift(a);
@@ -125,8 +125,10 @@ async function pollGoogleNews() {
 }
 
 // Built-in accounts with free public feeds (checked October 2026).
+// Telegram follower counts are read live from each channel page.
+export const MIN_FOLLOWERS = 10_000;
 export const SOCIAL = [
-  { kind: 'rss', url: 'https://trumpstruth.org/feed', author: '@realDonaldTrump (Truth Social)', ignore: ['Trump', 'Donald', 'President'] },
+  { kind: 'rss', url: 'https://trumpstruth.org/feed', author: '@realDonaldTrump (Truth Social)', followers: 10_000_000, ignore: ['Trump', 'Donald', 'President'] },
   { kind: 'tg', channel: 'WatcherGuru', author: '@WatcherGuru' },
   { kind: 'tg', channel: 'lookonchainchannel', author: '@lookonchain' },
   { kind: 'tg', channel: 'whale_alert_io', author: '@whale_alert' },
@@ -156,6 +158,12 @@ export function parseTelegram(html, channel) {
   }
   return out;
 }
+export function parseSubscribers(html) {
+  const m = html.match(/tgme_channel_info_counter"><span class="counter_value">([\d.,\s]+?)\s*([KM]?)<\/span>\s*<span class="counter_type">subscribers/i);
+  if (!m) return null;
+  const n = Number(m[1].replace(/[,\s]/g, ''));
+  return Math.round(n * (m[2] === 'M' ? 1e6 : m[2] === 'K' ? 1e3 : 1));
+}
 export function parseRss(xml) {
   return xml.split('<item>').slice(1, 20).map(item => {
     const pick = tag => decode((item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`)) ?? [])[1] ?? '');
@@ -171,14 +179,17 @@ async function pollSocial() {
     try {
       const body = await fetchText(src.kind === 'tg' ? `https://t.me/s/${src.channel}` : src.url);
       posts = src.kind === 'tg' ? parseTelegram(body, src.channel) : parseRss(body);
+      if (src.kind === 'tg') src.followers = parseSubscribers(body) ?? src.followers;
     } catch { continue; }
+    // Only big, known accounts count: anything under 10k followers is skipped.
+    if ((src.followers ?? 0) < MIN_FOLLOWERS) continue;
     for (const p of posts) {
       if (!p.text || seenPosts.has(p.id) || Date.now() - p.at > 2 * 3600_000) continue;
       seenPosts.add(p.id);
       const long = p.text.length > 200;
       for (const k of extractKeywords(p.text, { headline: long, ignore: src.ignore ?? [] })) {
         if (long && !k.strong) continue;
-        const info = { strong: k.strong, source: 'social', text: p.text, url: p.url, author: src.author, at: p.at };
+        const info = { strong: k.strong, source: 'social', text: p.text, url: p.url, author: src.author, followers: src.followers, at: p.at };
         addWatchWord(k.kw, info);
         wordHook({ kw: k.kw, ...info });
       }

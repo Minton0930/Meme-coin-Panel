@@ -58,3 +58,24 @@ Both were only minutes old, so they came through JUST LAUNCHED, which skips hold
 - A 35%+ drop in 5 minutes, or sells running 1.7x buys (40+ sells), is now a red flag.
 
 What still can't be caught: a dev or insider can sell everything in one transaction between two checks. Nothing reading public data can warn you before that first sell. In these cases, the only defence is position size.
+
+## v0.6.0: one-person-many-wallets checks (16 Oct 2026)
+
+These are new red flags. Any one of them keeps a coin out of the feed:
+
+| Check | Red flag | Warning |
+|---|---|---|
+| Top 10 wallets funded by the same wallet (who paid for each wallet's first transaction) | 3 or more | 2 holding 3%+ together |
+| Top 10 wallets created close together | 4 or more within 2 hours of each other | 3 |
+| Top 10 wallets holding near-identical amounts (within 3% of each other) | 3 or more, together holding 3%+ | |
+| Brand-new throwaway wallets in the top 10 (under a day old, under 15 transactions) | 5 or more | 3 or more |
+| No community links | no X and no Telegram | |
+| Dev track record (RugCheck's list of the dev's earlier coins) | all 2+ earlier coins dead (under $10k) | 80%+ dead |
+
+The cluster check costs about 2 RPC calls per wallet, so it runs one coin at a time on coins that already look clean. A coin waits outside the feed until this check is done. It reruns every 10 minutes.
+
+**Siren:** it only sounds for big known accounts. Telegram channels have their follower count read live, and anything under 10,000 followers is ignored. Trump's Truth Social always counts. Plain news headlines still match coins, but they no longer set off the siren.
+
+**What free data can't tell you:**
+- Who the dev really is. A wallet address has no name. The app judges the dev by the wallet's age and by what happened to its earlier coins.
+- Wallets bought or funded through exchanges. A dev who funds wallets from Binance or a mixer hides the shared funder, so the age and balance checks are the backstop.

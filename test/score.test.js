@@ -119,3 +119,30 @@ test('a 5-minute crash with heavy selling is a red flag', () => {
   assert.ok(r.factors.some(f => f.key === 'crash' && f.status === 'bad'));
   assert.ok(r.factors.some(f => f.key === 'dump' && f.status === 'bad'));
 });
+
+test('top-10 wallets made by one person are caught', async () => {
+  const { analyzeCluster } = await import('../src/sources/solana.js');
+  const t = Date.now() - 3600_000;
+  const same = analyzeCluster([1, 2, 3, 4, 5].map(i => ({ address: 'w' + i, pct: 2 + i * 0.01, born: t + i * 60_000, txs: 4, funder: 'F' })));
+  assert.equal(same.sameFunder.n, 5);
+  assert.equal(same.sameAge.n, 5);
+  assert.equal(same.sameBal.n, 5);
+  const r = riskScore({ createdAt: Date.now(), cluster: same, rug: { holders: [{ address: 'w1', pct: 2 }] } });
+  assert.equal(r.factors.find(f => f.key === 'cluster').status, 'bad');
+  const mixed = analyzeCluster([
+    { address: 'a', pct: 6, born: null, txs: 1000, funder: null },
+    { address: 'b', pct: 3.1, born: t - 90 * 86400_000, txs: 300, funder: 'X' },
+    { address: 'c', pct: 1.2, born: t - 9 * 86400_000, txs: 80, funder: 'Y' },
+  ]);
+  assert.ok(mixed.sameFunder.n <= 1 && mixed.sameAge.n <= 1 && mixed.sameBal.n <= 1);
+});
+
+test('no X and no Telegram blocks a coin', () => {
+  const r = riskScore({ createdAt: Date.now(), info: { website: 'https://a.b' }, market: { dexId: 'pumpfun', buys5m: 0, sells5m: 0, change1h: 0, change5m: 0 } });
+  assert.equal(r.factors.find(f => f.key === 'community').status, 'bad');
+});
+
+test('a dev whose earlier coins all died is a red flag', () => {
+  const r = riskScore({ createdAt: Date.now(), rug: { creatorPast: [{ mcap: 900 }, { mcap: 3000 }, { mcap: 120 }] } });
+  assert.equal(r.factors.find(f => f.key === 'devpast').status, 'bad');
+});

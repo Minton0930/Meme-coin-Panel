@@ -5,7 +5,7 @@ import { riskScore, momentumScore } from './score.js';
 import * as dex from './sources/dexscreener.js';
 import { startPumpPortal } from './sources/pumpportal.js';
 import { rugReport } from './sources/rugcheck.js';
-import { mintInfo, topHolders, walletAge, bundleCheck, walletTokenBalance } from './sources/solana.js';
+import { mintInfo, topHolders, walletAge, bundleCheck, walletTokenBalance, holderCluster } from './sources/solana.js';
 import { potentialScore, freshScore } from './score.js';
 import { refreshCoinGecko, trendFor } from './sources/trends.js';
 import { startNewsRadar, checkCoin, setWordHook, radarInfo } from './sources/news.js';
@@ -128,6 +128,23 @@ async function bundleTick() {
   try { cand.bundle = await bundleCheck(cand.mint, cand.creator ?? cand.rug?.creator, cand.chain?.supply ?? 1e9); }
   catch (e) { cand.bundle = { failed: true, checkedAt: Date.now() }; setTimeout(() => { if (cand.bundle?.failed) delete cand.bundle; }, 120_000); }
   finally { bundleBusy = false; }
+  rescore(cand);
+}
+
+// ---- Top-10 cluster check (same age / same balance / same funder), one coin at
+// a time, for coins that otherwise look clean. Re-checked every 10 minutes. ----
+let clusterBusy = false;
+async function clusterTick() {
+  if (clusterBusy) return;
+  const holdersOf = c => (c.rug?.holders?.length ? c.rug.holders : c.chain?.holders) ?? null;
+  const cand = [...coins.values()]
+    .filter(c => holdersOf(c)?.length && c.risk && c.risk.score < 50 && (!c.cluster || Date.now() - c.cluster.checkedAt > 10 * 60_000))
+    .sort((a, b) => (!!a.cluster - !!b.cluster) || interest(b) - interest(a))[0];
+  if (!cand) return;
+  clusterBusy = true;
+  try { cand.cluster = await holderCluster(holdersOf(cand)); }
+  catch { cand.cluster = { failed: true, checkedAt: Date.now() - 9 * 60_000 }; } // retry in ~1 min
+  finally { clusterBusy = false; }
   rescore(cand);
 }
 
@@ -298,5 +315,6 @@ export function start() {
   every(60_000, gtTick, 'geckoterminal');
   every(1_000, bundleTick, 'bundles');
   every(1_500, watchdogTick, 'watchdog');
+  every(1_000, clusterTick, 'cluster');
   enrichLoop();
 }

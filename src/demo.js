@@ -37,7 +37,7 @@ function spawn(forced, live) {
       freezeAuthority: shady && Math.random() < 0.2 ? addr() : null,
       authoritiesKnown: true, holders: top, totalHolders: Math.floor(rnd(20, 4000)),
       lpLockedPct: graduated ? (shady && Math.random() < 0.4 ? rnd(0, 60) : 100) : null,
-      creatorTokenCount: shady ? Math.floor(rnd(1, 25)) : 1, insidersDetected: shady ? Math.floor(rnd(0, 6)) : 0,
+      creatorTokenCount: shady ? Math.floor(rnd(1, 25)) : 1, creatorPast: shady ? [1, 2, 3].map(() => ({ mcap: rnd(500, 6000) })) : [{ mcap: rnd(50_000, 900_000) }, { mcap: rnd(2000, 40_000) }], insidersDetected: shady ? Math.floor(rnd(0, 6)) : 0,
       rugged: false, risks: [],
     },
     dev: { ageDays: devAge, txCount: Math.floor(rnd(3, 900)), complete: true, firstSeen: Date.now() - devAge * 86_400_000 },
@@ -45,6 +45,7 @@ function spawn(forced, live) {
     jup: { holders: Math.floor(rnd(30, 5000)), organicScore: shady ? rnd(0, 25) : rnd(20, 90), netBuyers5m: Math.floor(rnd(shady ? -20 : -5, 40)), holderChange1h: Math.floor(rnd(-10, 120)), checkedAt: Date.now() },
     info: { twitter: Math.random() < 0.7 ? `https://x.com/${sym.toLowerCase()}_demo` : null, website: Math.random() < 0.4 ? 'https://example.com' : null, telegram: Math.random() < 0.4 ? 'https://t.me/' : null, description: `${sym} demo coin. Fake text for trying the dashboard.`, replies: Math.floor(rnd(0, 300)), kingOfHill: Math.random() < 0.1, checkedAt: Date.now() },
     bundle: { wallets: Math.floor(rnd(1, shady ? 40 : 6)), sameBlock: Math.floor(rnd(0, shady ? 12 : 3)), pct: shady ? rnd(3, 35) : rnd(0, 6), checkedAt: Date.now() },
+    cluster: { checked: 10, sameAge: { n: shady ? Math.floor(rnd(2, 7)) : Math.floor(rnd(0, 3)), pct: rnd(2, 20) }, sameBal: { n: shady && Math.random() < 0.5 ? 4 : 1, pct: rnd(3, 12) }, sameFunder: { n: shady ? Math.floor(rnd(1, 6)) : 1, pct: rnd(1, 15) }, fresh: shady ? Math.floor(rnd(2, 8)) : Math.floor(rnd(0, 3)), checkedAt: Date.now() },
     gtRank: graduated && Math.random() < 0.2 ? Math.floor(rnd(1, 20)) : undefined,
     trend: { coingeckoTrending: Math.random() < 0.05, reddit: { posts1h: Math.floor(rnd(0, 6)), posts24h: Math.floor(rnd(0, 40)), top: [] }, tiktok: null, tiktokEnabled: false, checkedAt: Date.now() },
   });
